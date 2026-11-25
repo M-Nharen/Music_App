@@ -1,17 +1,25 @@
-//! The main window: input handling, state, and the four tabs.
+//! The main window: input handling, state, the chord engine and the tabs.
+//! The Play and Keybinds tabs live in `app/play.rs` and `app/keybinds.rs`.
 
+mod keybinds;
+mod play;
+
+use crate::audio::patterns::Pattern;
+use crate::audio::sequencer::{ChordNotes, StyleKind, StyleParams};
 use crate::audio::{Command, Engine};
 use crate::config::{self, Config, DeviceProfile, FileWatch};
 use crate::devices::{self, OutputInfo};
-use crate::keymap::{Action, Keymap};
+use crate::keymap::{Action, BUILTIN_LAYOUTS, KeyId, Keymap};
 use crate::latency::{TARGET_TAPS, TEST_BPM, TapResult, TapTest};
-use crate::music::{INSTRUMENTS, note_name};
+use crate::music::{BASS_SOUNDS, INSTRUMENTS, note_name};
 use crate::theme::{self, Palette};
-use crate::ui::widgets::{KeyboardView, card, chip, now_playing, piano_strip};
+use crate::theory::{Chord, ChordMod, ChordRef, build_chord, voice_chord};
+use crate::ui::widgets::{CapLabel, CapStyle, KeyboardView, card, chip};
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use egui::{Event, Key, RichText};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -19,6 +27,12 @@ const VELOCITIES: [(i32, &str); 3] = [(60, "Soft"), (95, "Normal"), (122, "Loud"
 const BUFFER_CHOICES: [u32; 5] = [32, 64, 128, 256, 512];
 /// MIDI note that `note 0` plays at octave 0 (C3).
 const BASE_NOTE: i32 = 48;
+/// Styles that aren't patterns, as stored in config.toml.
+const FIXED_STYLES: [(&str, &str); 3] = [
+    ("block", "Block chords"),
+    ("strum", "Strum"),
+    ("arpeggio", "Arpeggio"),
+];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -54,16 +68,35 @@ pub struct QwertoneApp {
 
     tab: Tab,
     /// Keys physically held right now (any key, bound or not).
-    held: HashSet<Key>,
+    held: HashSet<KeyId>,
     /// Key -> note it started, so releasing always stops the right note
     /// even if you changed octave in between.
-    sounding: HashMap<Key, i32>,
+    sounding: HashMap<KeyId, i32>,
     sustain_on: bool,
 
+    // Chords.
+    /// Chord keys held, oldest first; the last one plays.
+    chord_keys: Vec<(KeyId, ChordRef)>,
+    /// Chord modifier keys held.
+    mod_keys: Vec<(KeyId, ChordMod)>,
+    /// The chord that last played (kept while latched).
+    last_chord_ref: Option<ChordRef>,
+    /// What's sounding / shown: the chord, its notes, its bass note.
+    chord: Option<Chord>,
+    voicing: Vec<i32>,
+    bass_note: Option<i32>,
+    /// A chord keeps sounding after its key was released (latch / pedal).
+    chord_latched: bool,
+    patterns: Vec<Arc<Pattern>>,
+    /// Patterns replaced by a reload, kept so the audio thread never frees one.
+    retired_patterns: Vec<Arc<Pattern>>,
+    pattern_warnings: Vec<String>,
+    last_drum: Option<(u8, Instant)>,
+
     // Keybind editor.
-    selected_key: Option<Key>,
+    selected_key: Option<KeyId>,
     /// Waiting for a key press to bind: (key it's moving from, action).
-    capture_for: Option<(Option<Key>, Action)>,
+    capture_for: Option<(Option<KeyId>, Action)>,
     new_layout_name: String,
 
     // Latency test.
@@ -72,7 +105,7 @@ pub struct QwertoneApp {
 
     // Keyboard ghosting test.
     max_held: usize,
-    best_combo: Vec<Key>,
+    best_combo: Vec<KeyId>,
 
     toast: Option<(String, Instant)>,
     last_poll: Instant,
@@ -96,6 +129,7 @@ impl QwertoneApp {
         let keymap_file = cfg.keymap.clone();
         let (keymap, keymap_warnings) = config::load_keymap(&keymap_file);
         let (sf_tx, sf_rx) = unbounded();
+        let (patterns, pattern_warnings) = config::load_patterns();
 
         let mut app = Self {
             palette,
@@ -120,6 +154,17 @@ impl QwertoneApp {
             held: HashSet::new(),
             sounding: HashMap::new(),
             sustain_on: false,
+            chord_keys: Vec::new(),
+            mod_keys: Vec::new(),
+            last_chord_ref: None,
+            chord: None,
+            voicing: Vec::new(),
+            bass_note: None,
+            chord_latched: false,
+            patterns: patterns.into_iter().map(Arc::new).collect(),
+            retired_patterns: Vec::new(),
+            pattern_warnings,
+            last_drum: None,
             selected_key: None,
             capture_for: None,
             new_layout_name: String::new(),
@@ -142,11 +187,14 @@ impl QwertoneApp {
     fn start_engine(&mut self) {
         self.engine = None; // drop the old stream first
         self.sounding.clear();
+        self.reset_chord_state();
         let program = self.instrument().program;
         match Engine::start(self.cfg.buffer_frames, program, self.cfg.volume) {
             Ok(engine) => {
                 self.engine = Some(engine);
                 self.engine_error = None;
+                self.send_programs();
+                self.send_style();
                 self.load_soundfont(self.cfg.soundfont.clone());
             }
             Err(e) => {
@@ -187,18 +235,49 @@ impl QwertoneApp {
     fn set_instrument(&mut self, idx: usize) {
         self.cfg.instrument = idx % INSTRUMENTS.len();
         self.send(Command::Program(self.instrument().program));
+        self.send_programs();
         self.mark_dirty();
+    }
+
+    /// Chord and bass channel sounds.
+    fn send_programs(&self) {
+        let chord = self
+            .cfg
+            .chord_instrument
+            .map(|i| INSTRUMENTS[i.min(INSTRUMENTS.len() - 1)])
+            .unwrap_or_else(|| self.instrument());
+        let bass = BASS_SOUNDS[self.cfg.bass_instrument.min(BASS_SOUNDS.len() - 1)];
+        self.send(Command::ChannelProgram {
+            channel: 1,
+            program: chord.program,
+        });
+        self.send(Command::ChannelProgram {
+            channel: 2,
+            program: bass.program,
+        });
     }
 
     fn base_note(&self) -> i32 {
         BASE_NOTE + self.cfg.octave * 12 + self.cfg.transpose
     }
 
+    fn velocity(&self) -> i32 {
+        VELOCITIES[self.cfg.velocity.min(2)].0
+    }
+
     fn all_notes_off(&mut self) {
         self.sounding.clear();
         self.sustain_on = false;
+        self.reset_chord_state();
         self.send(Command::Sustain(false));
         self.send(Command::AllOff);
+    }
+
+    fn reset_chord_state(&mut self) {
+        self.chord_keys.clear();
+        self.chord = None;
+        self.bass_note = None;
+        self.chord_latched = false;
     }
 
     fn notify(&mut self, msg: impl Into<String>) {
@@ -209,22 +288,355 @@ impl QwertoneApp {
         self.cfg_dirty_since.get_or_insert_with(Instant::now);
     }
 
+    // ---------------------------------------------------------------- styles
+
+    /// Every style: the fixed ones, then each pattern. (config id, label)
+    fn styles(&self) -> Vec<(String, String)> {
+        FIXED_STYLES
+            .iter()
+            .map(|(id, label)| (id.to_string(), label.to_string()))
+            .chain(
+                self.patterns
+                    .iter()
+                    .map(|p| (p.name.to_lowercase(), p.name.clone())),
+            )
+            .collect()
+    }
+
+    fn style_index(&self) -> usize {
+        self.styles()
+            .iter()
+            .position(|(id, _)| id.eq_ignore_ascii_case(&self.cfg.style))
+            .unwrap_or(0)
+    }
+
+    fn current_pattern(&self) -> Option<Arc<Pattern>> {
+        self.patterns
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(&self.cfg.style))
+            .cloned()
+    }
+
+    fn style_kind(&self) -> StyleKind {
+        match self.cfg.style.as_str() {
+            "block" => StyleKind::Block,
+            "strum" => StyleKind::Strum,
+            "arpeggio" => StyleKind::Arp,
+            _ if self.current_pattern().is_some() => StyleKind::Pattern,
+            _ => StyleKind::Block,
+        }
+    }
+
+    fn rhythmic(&self) -> bool {
+        matches!(self.style_kind(), StyleKind::Arp | StyleKind::Pattern)
+    }
+
+    /// Extra time allowed for a late chord change to still land on the beat:
+    /// about the measured output delay on Bluetooth, since you react to
+    /// what you hear.
+    fn grace_ms(&self) -> f32 {
+        let measured = self
+            .current_device
+            .as_ref()
+            .and_then(|d| self.cfg.devices.get(&d.sink))
+            .map(|p| p.latency_ms)
+            .unwrap_or(0.0);
+        (80.0 + measured * 0.8).min(320.0)
+    }
+
+    fn send_style(&self) {
+        let params = StyleParams {
+            kind: self.style_kind(),
+            strum_ms: self.cfg.strum_ms.clamp(5.0, 120.0),
+            arp_mode: self.cfg.arp_mode,
+            arp_steps_per_beat: self.cfg.arp_rate.clamp(1, 8),
+            arp_octaves: self.cfg.arp_octaves.clamp(1, 3),
+            gate: 0.8,
+            bass: self.cfg.chord_bass,
+            drums: self.cfg.drums,
+            latch: self.cfg.latch,
+            grace_ms: self.grace_ms(),
+        };
+        self.send(Command::Tempo(self.cfg.tempo.clamp(40.0, 240.0)));
+        self.send(Command::Pattern(self.current_pattern()));
+        self.send(Command::Style(params));
+    }
+
+    fn set_style(&mut self, idx: usize) {
+        let styles = self.styles();
+        let idx = idx % styles.len();
+        self.cfg.style = styles[idx].0.clone();
+        self.mark_dirty();
+        self.send_style();
+        if !self.rhythmic() && self.chord_keys.is_empty() && !self.sustain_on {
+            self.chord_latched = false;
+            self.chord = None;
+        }
+        let desc = self
+            .current_pattern()
+            .map(|p| format!(" · {}", p.description))
+            .unwrap_or_default();
+        self.notify(format!("Style: {}{desc}", styles[idx].1));
+    }
+
+    fn set_tempo(&mut self, bpm: f32) {
+        self.cfg.tempo = bpm.clamp(40.0, 240.0).round();
+        self.send(Command::Tempo(self.cfg.tempo));
+        self.mark_dirty();
+    }
+
+    fn rhythm_running(&self) -> bool {
+        self.engine
+            .as_ref()
+            .is_some_and(|e| e.stats.seq_running.load(Ordering::Relaxed))
+    }
+
+    fn toggle_rhythm(&mut self) {
+        if self.rhythm_running() {
+            self.send(Command::Rhythm(false));
+            self.chord_latched = false;
+            if self.chord_keys.is_empty() {
+                self.chord = None;
+            }
+            return;
+        }
+        if !self.rhythmic() {
+            // Beginner shortcut: pick the first pattern so something happens.
+            let idx = FIXED_STYLES.len();
+            if idx < self.styles().len() {
+                self.set_style(idx);
+            }
+        }
+        self.send(Command::Rhythm(true));
+        if let (Some(c), true) = (self.last_chord_ref, self.chord_keys.is_empty()) {
+            // Restart with the last chord so the rhythm isn't just drums.
+            if self.style_kind() == StyleKind::Arp
+                || self.current_pattern().is_some_and(|p| !p.has_drums)
+            {
+                self.play_chord(c, true);
+                self.release_chord_engine();
+            }
+        }
+    }
+
+    fn reload_patterns(&mut self) {
+        let (list, warnings) = config::load_patterns();
+        let old = std::mem::replace(&mut self.patterns, list.into_iter().map(Arc::new).collect());
+        self.retired_patterns.extend(old);
+        self.pattern_warnings = warnings;
+        self.send_style();
+        self.notify(format!("{} patterns loaded", self.patterns.len()));
+    }
+
+    // ---------------------------------------------------------------- chords
+
+    fn tonic_pc(&self) -> i32 {
+        self.cfg.transpose.rem_euclid(12)
+    }
+
+    fn chord_mods(&self) -> u8 {
+        self.mod_keys.iter().fold(0, |a, (_, m)| a | m.bit())
+    }
+
+    /// Where chords sit: around G3 at octave 0, whatever the key.
+    fn chord_center(&self) -> i32 {
+        BASE_NOTE + 12 * self.cfg.octave + 7
+    }
+
+    /// Work out and send a chord. `retrigger` = a fresh key press.
+    fn play_chord(&mut self, cref: ChordRef, retrigger: bool) {
+        let chord = build_chord(cref, self.chord_mods(), self.tonic_pc(), self.cfg.scale);
+        let voicing = voice_chord(
+            &chord,
+            &self.voicing,
+            self.chord_center(),
+            self.cfg.voice_leading,
+        );
+        let bass = self
+            .cfg
+            .chord_bass
+            .then(|| BASE_NOTE - 12 + 12 * self.cfg.octave + chord.root_pc);
+        self.send(Command::Chord {
+            chord: Some(ChordNotes::new(&voicing, bass)),
+            retrigger,
+            velocity: self.velocity() as u8,
+        });
+        self.voicing = voicing;
+        self.bass_note = bass;
+        self.chord = Some(chord);
+        self.last_chord_ref = Some(cref);
+    }
+
+    /// Tell the engine no chord key is held any more.
+    fn release_chord_engine(&mut self) {
+        self.send(Command::Chord {
+            chord: None,
+            retrigger: false,
+            velocity: self.velocity() as u8,
+        });
+        self.chord_latched = (self.rhythmic() && self.cfg.latch) || self.sustain_on;
+        if !self.chord_latched {
+            self.chord = None;
+        }
+    }
+
+    /// Re-work the sounding chord after a modifier, key, scale or octave
+    /// change, without re-striking it.
+    fn refresh_chord(&mut self) {
+        if let Some((_, c)) = self.chord_keys.last().copied() {
+            self.play_chord(c, false);
+        } else if self.chord_latched
+            && let Some(c) = self.last_chord_ref
+        {
+            self.play_chord(c, false);
+            self.send(Command::Chord {
+                chord: None,
+                retrigger: false,
+                velocity: self.velocity() as u8,
+            });
+        }
+    }
+
+    fn change_key(&mut self, delta: i32) {
+        self.cfg.transpose = (self.cfg.transpose + delta).clamp(-12, 12);
+        self.mark_dirty();
+        self.refresh_chord();
+    }
+
+    fn key_name(&self) -> String {
+        format!(
+            "{} {}",
+            crate::theory::pc_name(
+                self.tonic_pc(),
+                self.cfg.scale.prefers_flats(self.tonic_pc())
+            ),
+            self.cfg.scale.name().to_lowercase()
+        )
+    }
+
+    /// The note a `note`/`melody` action plays right now.
+    fn action_note(&self, a: Action) -> Option<i32> {
+        match a {
+            Action::Note(n) => {
+                let raw = self.base_note() + n;
+                Some(if self.cfg.scale_lock {
+                    self.cfg.scale.snap(self.tonic_pc(), raw)
+                } else {
+                    raw
+                })
+            }
+            Action::Melody(n) => Some(self.cfg.scale.note(self.base_note() + 12, n)),
+            _ => None,
+        }
+    }
+
+    /// What a key cap shows for an action, in the current key and with the
+    /// modifiers held right now.
+    fn cap_label(&self) -> impl Fn(Action) -> CapLabel + '_ {
+        let tonic = self.tonic_pc();
+        let scale = self.cfg.scale;
+        let mods = self.chord_mods();
+        let base = self.base_note();
+        let show_scale = self.cfg.show_scale;
+        move |a: Action| match a {
+            Action::Note(_) | Action::Melody(_) => {
+                let note = self.action_note(a).unwrap_or(base);
+                let style = CapStyle::Note {
+                    black: crate::music::is_black(note),
+                };
+                let sub = match a {
+                    // Scale step number (1 = home note of the key).
+                    Action::Melody(n) => (n.rem_euclid(scale.steps().len() as i32) + 1).to_string(),
+                    // Dot = in the scale, star = the key's home note.
+                    _ if show_scale && (note - tonic).rem_euclid(12) == 0 => "★".into(),
+                    _ if show_scale && scale.contains(tonic, note) => "•".into(),
+                    _ => String::new(),
+                };
+                CapLabel {
+                    main: note_name(note),
+                    sub,
+                    style,
+                }
+            }
+            Action::Chord(c) => {
+                let ch = build_chord(c, mods, tonic, scale);
+                CapLabel {
+                    main: ch.name,
+                    sub: ch.numeral,
+                    style: match c {
+                        ChordRef::Diatonic(_) => CapStyle::Chord,
+                        ChordRef::Fixed { .. } => CapStyle::Borrowed,
+                    },
+                }
+            }
+            Action::Mod(m) => CapLabel {
+                main: m.short().into(),
+                sub: String::new(),
+                style: CapStyle::Mod {
+                    on: mods & m.bit() != 0,
+                },
+            },
+            Action::Drum(d) => CapLabel {
+                main: crate::drums::short(d),
+                sub: String::new(),
+                style: CapStyle::Drum,
+            },
+            other => CapLabel::simple(other, base),
+        }
+    }
+
+    /// Key names bound to an action, e.g. "Shift / 1", for help text.
+    fn keys_text(&self, a: Action) -> String {
+        let keys = self.keymap.keys_for(a);
+        if keys.is_empty() {
+            "(no key)".into()
+        } else {
+            keys.iter()
+                .map(|k| k.label())
+                .collect::<Vec<_>>()
+                .join(" / ")
+        }
+    }
+
     // ----------------------------------------------------------------- input
 
     /// Handle one key event as an instrument. Returns true if consumed.
-    fn play_key(&mut self, key: Key, pressed: bool, repeat: bool) -> bool {
-        // Releases always go through so notes never get stuck.
+    fn play_key(&mut self, key: KeyId, pressed: bool, repeat: bool) -> bool {
+        // Releases always go through so notes never get stuck, using what
+        // the key started rather than what it's bound to now.
         if !pressed {
-            if let Some(note) = self.sounding.remove(&key)
-                && let Some(e) = &self.engine
-            {
-                e.note_off(note);
+            let mut used = false;
+            if let Some(note) = self.sounding.remove(&key) {
+                if let Some(e) = &self.engine {
+                    e.note_off(note);
+                }
+                used = true;
+            }
+            if let Some(i) = self.chord_keys.iter().position(|(k, _)| *k == key) {
+                let was_top = i + 1 == self.chord_keys.len();
+                self.chord_keys.remove(i);
+                if was_top {
+                    match self.chord_keys.last().copied() {
+                        Some((_, c)) => self.play_chord(c, true),
+                        None => self.release_chord_engine(),
+                    }
+                }
+                used = true;
+            }
+            if let Some(i) = self.mod_keys.iter().position(|(k, _)| *k == key) {
+                self.mod_keys.remove(i);
+                self.refresh_chord();
+                used = true;
             }
             if self.keymap.get(key) == Some(Action::Sustain) {
                 self.sustain_on = false;
                 self.send(Command::Sustain(false));
+                if self.chord_keys.is_empty() && !(self.rhythmic() && self.cfg.latch) {
+                    self.chord_latched = false;
+                    self.chord = None;
+                }
             }
-            return self.keymap.get(key).is_some();
+            return used || self.keymap.get(key).is_some();
         }
         let Some(action) = self.keymap.get(key) else {
             return false;
@@ -233,16 +645,36 @@ impl QwertoneApp {
             return true;
         }
         match action {
-            Action::Note(n) => {
+            Action::Note(_) | Action::Melody(_) => {
                 if self.sounding.contains_key(&key) {
                     return true;
                 }
-                let note = (self.base_note() + n).clamp(0, 127);
-                let vel = VELOCITIES[self.cfg.velocity.min(2)].0;
+                let note = self.action_note(action).unwrap_or(0).clamp(0, 127);
                 if let Some(e) = &self.engine {
-                    e.note_on(note, vel);
+                    e.note_on(note, self.velocity());
                 }
                 self.sounding.insert(key, note);
+            }
+            Action::Chord(c) => {
+                if self.chord_keys.iter().any(|(k, _)| *k == key) {
+                    return true;
+                }
+                self.chord_keys.push((key, c));
+                self.chord_latched = false;
+                self.play_chord(c, true);
+            }
+            Action::Mod(m) => {
+                if !self.mod_keys.iter().any(|(k, _)| *k == key) {
+                    self.mod_keys.push((key, m));
+                    self.refresh_chord();
+                }
+            }
+            Action::Drum(d) => {
+                self.send(Command::Drum {
+                    note: d,
+                    velocity: self.velocity() as u8,
+                });
+                self.last_drum = Some((d, Instant::now()));
             }
             Action::Sustain => {
                 self.sustain_on = true;
@@ -251,19 +683,15 @@ impl QwertoneApp {
             Action::OctaveUp => {
                 self.cfg.octave = (self.cfg.octave + 1).min(3);
                 self.mark_dirty();
+                self.refresh_chord();
             }
             Action::OctaveDown => {
                 self.cfg.octave = (self.cfg.octave - 1).max(-3);
                 self.mark_dirty();
+                self.refresh_chord();
             }
-            Action::TransposeUp => {
-                self.cfg.transpose = (self.cfg.transpose + 1).min(12);
-                self.mark_dirty();
-            }
-            Action::TransposeDown => {
-                self.cfg.transpose = (self.cfg.transpose - 1).max(-12);
-                self.mark_dirty();
-            }
+            Action::TransposeUp => self.change_key(1),
+            Action::TransposeDown => self.change_key(-1),
             Action::InstrumentNext => self.set_instrument(self.cfg.instrument + 1),
             Action::InstrumentPrev => {
                 self.set_instrument(self.cfg.instrument + INSTRUMENTS.len() - 1)
@@ -273,16 +701,61 @@ impl QwertoneApp {
                 self.mark_dirty();
             }
             Action::Panic => self.all_notes_off(),
+            Action::StyleNext => self.set_style(self.style_index() + 1),
+            Action::StylePrev => {
+                let n = self.styles().len();
+                self.set_style(self.style_index() + n - 1)
+            }
+            Action::Rhythm => self.toggle_rhythm(),
+            Action::TempoUp => {
+                self.set_tempo(self.cfg.tempo + 5.0);
+                self.notify(format!("Tempo {:.0}", self.cfg.tempo));
+            }
+            Action::TempoDown => {
+                self.set_tempo(self.cfg.tempo - 5.0);
+                self.notify(format!("Tempo {:.0}", self.cfg.tempo));
+            }
+            Action::ScaleNext => {
+                self.cfg.scale = self.cfg.scale.next();
+                self.mark_dirty();
+                self.refresh_chord();
+                self.notify(format!(
+                    "Scale: {} ({})",
+                    self.key_name(),
+                    self.cfg.scale.mood()
+                ));
+            }
+            Action::ScaleLock => {
+                self.cfg.scale_lock = !self.cfg.scale_lock;
+                self.mark_dirty();
+                self.notify(if self.cfg.scale_lock {
+                    "Scale lock on: every key plays a note of the scale"
+                } else {
+                    "Scale lock off"
+                });
+            }
+            Action::LayoutNext => self.next_layout(),
         }
         true
+    }
+
+    fn next_layout(&mut self) {
+        let i = BUILTIN_LAYOUTS
+            .iter()
+            .position(|(f, _)| *f == self.keymap_file)
+            .map(|i| (i + 1) % BUILTIN_LAYOUTS.len())
+            .unwrap_or(0);
+        let (file, name) = BUILTIN_LAYOUTS[i];
+        self.switch_keymap(file);
+        self.notify(format!("Layout: {name}"));
     }
 
     /// Rebind capture: the next key pressed gets `action`. `from` is the key
     /// that had it before; if the new key already did something else, the
     /// two keys swap so nothing silently loses its key.
-    fn capture_key(&mut self, key: Key, from: Option<Key>, action: Action) {
+    fn capture_key(&mut self, key: KeyId, from: Option<KeyId>, action: Action) {
         self.capture_for = None;
-        if key == Key::Escape {
+        if key == KeyId::Key(Key::Escape) {
             self.notify("Rebind cancelled");
             return;
         }
@@ -329,6 +802,7 @@ impl QwertoneApp {
 
     fn switch_keymap(&mut self, file: &str) {
         self.all_notes_off();
+        self.mod_keys.clear();
         let (km, w) = config::load_keymap(file);
         self.keymap = km;
         self.keymap_warnings = w;
@@ -337,6 +811,74 @@ impl QwertoneApp {
         self.cfg.keymap = file.to_string();
         self.selected_key = None;
         self.mark_dirty();
+    }
+
+    /// Generate press/release events for Shift / Ctrl / Alt, which egui only
+    /// reports as a modifier state.
+    fn sync_modifiers(&mut self, m: egui::Modifiers, typing: bool) {
+        for (id, down) in [
+            (KeyId::Shift, m.shift),
+            (KeyId::Ctrl, m.ctrl || m.command),
+            (KeyId::Alt, m.alt),
+        ] {
+            if down == self.held.contains(&id) {
+                continue;
+            }
+            self.handle_input(id, down, false, egui::Modifiers::NONE, typing);
+        }
+    }
+
+    /// Route one key press/release. Returns true if it was used (so egui
+    /// shouldn't see it).
+    fn handle_input(
+        &mut self,
+        k: KeyId,
+        pressed: bool,
+        repeat: bool,
+        modifiers: egui::Modifiers,
+        typing: bool,
+    ) -> bool {
+        if pressed {
+            self.held.insert(k);
+        } else {
+            self.held.remove(&k);
+        }
+        if self.tab == Tab::KeyTest {
+            if self.held.len() > self.max_held {
+                self.max_held = self.held.len();
+                self.best_combo = self.held.iter().copied().collect();
+                self.best_combo.sort_by_key(|k| k.name());
+            }
+            // Still release notes that were playing before switching tab.
+            if !pressed {
+                self.play_key(k, false, false);
+            }
+            return true;
+        }
+        if let Some((from, action)) = self.capture_for {
+            if pressed && !repeat {
+                self.capture_key(k, from, action);
+            }
+            return true;
+        }
+        if self.tap.running && k == KeyId::Key(Key::Space) {
+            if pressed && !repeat {
+                self.tap.tap(Instant::now());
+            }
+            return true;
+        }
+        // Ctrl/Alt + key is a shortcut unless this layout uses Ctrl/Alt.
+        let shortcut = ((modifiers.ctrl || modifiers.command)
+            && self.keymap.get(KeyId::Ctrl).is_none())
+            || (modifiers.alt && self.keymap.get(KeyId::Alt).is_none());
+        if typing || shortcut {
+            // Let shortcuts and text fields work, but never leave notes hanging.
+            if !pressed {
+                self.play_key(k, false, false);
+            }
+            return false;
+        }
+        self.play_key(k, pressed, repeat)
     }
 
     // -------------------------------------------------------------- polling
@@ -348,6 +890,8 @@ impl QwertoneApp {
                 Ok(name) => {
                     self.sf_status = format!("Using SoundFont: {name}");
                     self.send(Command::Program(self.instrument().program));
+                    self.send_programs();
+                    self.send_style();
                 }
                 Err(e) => {
                     self.sf_status = format!("SoundFont failed ({e}); using the built-in synth")
@@ -395,6 +939,8 @@ impl QwertoneApp {
                     self.cfg = cfg;
                     self.send(Command::Program(self.instrument().program));
                     self.send(Command::Volume(self.cfg.volume));
+                    self.send_programs();
+                    self.send_style();
                     if keymap_changed {
                         let k = self.cfg.keymap.clone();
                         self.switch_keymap(&k);
@@ -431,6 +977,9 @@ impl QwertoneApp {
 
     fn on_device_changed(&mut self, dev: Option<OutputInfo>) {
         let Some(d) = dev else { return };
+        // The chord-change grace window follows the device's delay.
+        self.current_device = Some(d.clone());
+        self.send_style();
         let name = if d.description.is_empty() {
             d.sink.clone()
         } else {
@@ -538,334 +1087,6 @@ impl QwertoneApp {
                 if self.engine.is_none() {
                     chip(ui, p.error, p.surface, "audio off");
                 }
-            });
-        });
-    }
-
-    fn play_tab(&mut self, ui: &mut egui::Ui) {
-        let p = self.palette;
-        let sounding: Vec<i32> = self.sounding.values().copied().collect();
-        ui.horizontal_wrapped(|ui| {
-            // Instrument picker.
-            let inst = self.instrument();
-            let mut idx = self.cfg.instrument;
-            egui::ComboBox::from_id_salt("instrument")
-                .width(190.0)
-                .selected_text(format!(
-                    "{}{}",
-                    inst.name,
-                    if inst.bt_friendly { "  ✦" } else { "" }
-                ))
-                .show_ui(ui, |ui| {
-                    for (i, ins) in INSTRUMENTS.iter().enumerate() {
-                        let label = format!(
-                            "{}{}",
-                            ins.name,
-                            if ins.bt_friendly {
-                                "  ✦ Bluetooth-friendly"
-                            } else {
-                                ""
-                            }
-                        );
-                        ui.selectable_value(&mut idx, i, label);
-                    }
-                });
-            if idx != self.cfg.instrument {
-                self.set_instrument(idx);
-            }
-            chip(
-                ui,
-                p.surface_container_high,
-                p.on_surface,
-                format!("Octave {:+}", self.cfg.octave),
-            );
-            chip(
-                ui,
-                p.surface_container_high,
-                p.on_surface,
-                format!(
-                    "Key {}{}",
-                    crate::music::pitch_class_name(self.cfg.transpose),
-                    if self.cfg.transpose != 0 {
-                        format!(" ({:+})", self.cfg.transpose)
-                    } else {
-                        String::new()
-                    }
-                ),
-            );
-            chip(
-                ui,
-                p.surface_container_high,
-                p.on_surface,
-                format!("Velocity: {}", VELOCITIES[self.cfg.velocity.min(2)].1),
-            );
-            let (sf, sc) = if self.sustain_on {
-                (p.primary, p.on_primary)
-            } else {
-                (p.surface_container_high, p.on_surface_variant)
-            };
-            chip(
-                ui,
-                sf,
-                sc,
-                if self.sustain_on {
-                    "Pedal ON"
-                } else {
-                    "Pedal off"
-                },
-            );
-            ui.add_space(8.0);
-            ui.label("Volume");
-            let mut vol = self.cfg.volume;
-            if ui
-                .add(egui::Slider::new(&mut vol, 0.0..=1.5).show_value(false))
-                .changed()
-            {
-                self.cfg.volume = vol;
-                self.send(Command::Volume(vol));
-                self.mark_dirty();
-            }
-        });
-        ui.add_space(6.0);
-
-        card(ui, &p, "", |ui| now_playing(ui, &p, &sounding));
-        ui.add_space(6.0);
-
-        let base = self.base_note();
-        KeyboardView {
-            keymap: &self.keymap,
-            palette: &p,
-            base_note: base,
-            held: &self.held,
-            selected: None,
-            show_notes: true,
-        }
-        .show(ui);
-        ui.add_space(8.0);
-        let set: HashSet<i32> = sounding.iter().copied().collect();
-        piano_strip(ui, &p, BASE_NOTE + self.cfg.octave * 12, 3, &set);
-        ui.add_space(6.0);
-
-        let bt = self.current_device.as_ref().is_some_and(|d| d.bluetooth);
-        ui.label(
-            RichText::new(format!(
-                "Z-row + A-row = lower octave (starts at {}), Q-row + number row = upper octave. \
-                 Space = sustain pedal · ↑↓ octave · ←→ change key · PgUp/PgDn instrument · Tab velocity · Esc stop all.",
-                note_name(base)
-            ))
-            .color(p.on_surface_variant),
-        );
-        if bt {
-            ui.label(
-                RichText::new(
-                    "On Bluetooth: sounds marked ✦ (pads, strings, organ) hide the delay best. \
-                     Wired earphones remove it almost completely.",
-                )
-                .color(p.tertiary),
-            );
-        }
-    }
-
-    fn keybinds_tab(&mut self, ui: &mut egui::Ui) {
-        let p = self.palette;
-        ui.horizontal_wrapped(|ui| {
-            ui.label("Layout");
-            let mut chosen = self.keymap_file.clone();
-            egui::ComboBox::from_id_salt("layout")
-                .selected_text(format!("{} ({}.toml)", self.keymap.name, self.keymap_file))
-                .show_ui(ui, |ui| {
-                    for name in config::list_keymaps() {
-                        ui.selectable_value(&mut chosen, name.clone(), name);
-                    }
-                });
-            if chosen != self.keymap_file {
-                self.switch_keymap(&chosen);
-            }
-            ui.add_space(12.0);
-            ui.add(
-                egui::TextEdit::singleline(&mut self.new_layout_name)
-                    .hint_text("new layout name")
-                    .desired_width(150.0),
-            );
-            if ui.button("Save as new layout").clicked() {
-                let name = self.new_layout_name.trim().to_string();
-                if name.is_empty() {
-                    self.notify("Type a name for the new layout first");
-                } else {
-                    let file = config::slug(&name);
-                    self.keymap.name = name;
-                    self.keymap_file = file.clone();
-                    self.save_keymap();
-                    self.switch_keymap(&file);
-                    self.new_layout_name.clear();
-                    self.notify(format!("Saved as {file}.toml"));
-                }
-            }
-            if ui.button("Reset to Piano").clicked() {
-                let name = self.keymap.name.clone();
-                self.keymap = Keymap::piano();
-                self.keymap.name = name;
-                self.save_keymap();
-                self.notify("Layout reset to the Piano defaults");
-            }
-            if ui.button("Open folder").clicked() {
-                let _ = std::process::Command::new("xdg-open")
-                    .arg(config::keymaps_dir())
-                    .spawn();
-            }
-        });
-        for w in &self.keymap_warnings {
-            ui.label(RichText::new(format!("⚠ {w}")).color(p.error));
-        }
-        ui.add_space(6.0);
-
-        if let Some((_, a)) = self.capture_for {
-            card(ui, &p, "", |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.label(
-                        RichText::new(format!("Press a key for “{}”", a.describe()))
-                            .size(20.0)
-                            .color(p.primary),
-                    );
-                    ui.label("Esc to cancel");
-                });
-            });
-            ui.add_space(6.0);
-        }
-
-        let clicked = KeyboardView {
-            keymap: &self.keymap,
-            palette: &p,
-            base_note: self.base_note(),
-            held: &self.held,
-            selected: self.selected_key,
-            show_notes: true,
-        }
-        .show(ui);
-        if let Some(k) = clicked {
-            self.selected_key = Some(k);
-        }
-        ui.label(
-            RichText::new("Click a key to edit it, or use “Rebind” below and press the new key.")
-                .color(p.on_surface_variant),
-        );
-        ui.add_space(6.0);
-
-        ui.columns(2, |cols| {
-            // Left: edit the selected key.
-            card(&mut cols[0], &p, "Selected key", |ui| {
-                let Some(key) = self.selected_key else {
-                    ui.label("Nothing selected. Click a key on the keyboard above.");
-                    return;
-                };
-                ui.label(RichText::new(key.name()).size(20.0).strong());
-                let current = self.keymap.get(key);
-                let mut changed: Option<Option<Action>> = None;
-                let mut is_note = matches!(current, Some(Action::Note(_)));
-                ui.horizontal(|ui| {
-                    if ui.radio(is_note, "Plays a note").clicked() && !is_note {
-                        is_note = true;
-                        changed = Some(Some(Action::Note(0)));
-                    }
-                    if ui
-                        .radio(
-                            matches!(current, Some(a) if !matches!(a, Action::Note(_))),
-                            "Control",
-                        )
-                        .clicked()
-                    {
-                        changed = Some(Some(Action::Sustain));
-                    }
-                    if ui.radio(current.is_none(), "Nothing").clicked() {
-                        changed = Some(None);
-                    }
-                });
-                match current {
-                    Some(Action::Note(mut n)) => {
-                        ui.horizontal(|ui| {
-                            ui.label("Semitones above the layout's lowest C:");
-                            if ui
-                                .add(egui::DragValue::new(&mut n).range(-24..=48))
-                                .changed()
-                            {
-                                changed = Some(Some(Action::Note(n)));
-                            }
-                            ui.label(
-                                RichText::new(format!("= {} now", note_name(self.base_note() + n)))
-                                    .color(p.primary),
-                            );
-                        });
-                    }
-                    Some(a) => {
-                        let mut sel = a;
-                        egui::ComboBox::from_id_salt("control")
-                            .selected_text(sel.describe())
-                            .show_ui(ui, |ui| {
-                                for c in Action::CONTROLS {
-                                    ui.selectable_value(&mut sel, c, c.describe());
-                                }
-                            });
-                        if sel != a {
-                            changed = Some(Some(sel));
-                        }
-                    }
-                    None => {}
-                }
-                if let Some(new) = changed {
-                    match new {
-                        Some(a) => {
-                            self.keymap.bind(key, a);
-                        }
-                        None => self.keymap.unbind(key),
-                    }
-                    self.save_keymap();
-                }
-            });
-            // Right: list of everything, with rebind buttons.
-            card(&mut cols[1], &p, "All bindings", |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(260.0)
-                    .show(ui, |ui| {
-                        let mut rebind = None;
-                        let mut missing: Vec<Action> = Action::CONTROLS
-                            .iter()
-                            .copied()
-                            .filter(|a| self.keymap.keys_for(*a).is_empty())
-                            .collect();
-                        egui::Grid::new("bindings")
-                            .striped(true)
-                            .num_columns(3)
-                            .min_col_width(ui.available_width() / 3.3)
-                            .show(ui, |ui| {
-                                for (key, action) in self.keymap.sorted() {
-                                    ui.label(RichText::new(key.name()).strong());
-                                    let desc = match action {
-                                        Action::Note(n) => format!(
-                                            "{} (note {n})",
-                                            note_name(self.base_note() + n)
-                                        ),
-                                        a => a.describe(),
-                                    };
-                                    ui.label(desc);
-                                    if ui.small_button("Rebind").clicked() {
-                                        rebind = Some((Some(key), action));
-                                    }
-                                    ui.end_row();
-                                }
-                                for a in missing.drain(..) {
-                                    ui.label(RichText::new("—").color(p.outline));
-                                    ui.label(RichText::new(a.describe()).color(p.outline));
-                                    if ui.small_button("Assign").clicked() {
-                                        rebind = Some((None, a));
-                                    }
-                                    ui.end_row();
-                                }
-                            });
-                        if let Some(a) = rebind {
-                            self.all_notes_off();
-                            self.capture_for = Some(a);
-                        }
-                    });
             });
         });
     }
@@ -997,6 +1218,7 @@ impl QwertoneApp {
                                 entry.label = d.description.clone();
                                 entry.bluetooth = d.bluetooth;
                                 self.mark_dirty();
+                                self.send_style();
                                 self.notify("Saved");
                             }
                     }
@@ -1081,7 +1303,7 @@ impl QwertoneApp {
             ui.label(
                 "Laptop keyboards can't always detect several keys held at once. Hold keys down one at a time: \
                  if a key you're holding doesn't light up, your keyboard can't do that combination. \
-                 That's why the chord layout (Part 2) plays a whole chord from one key.",
+                 That's why the Chords + Melody layout plays a whole chord from one key.",
             );
             ui.horizontal(|ui| {
                 chip(
@@ -1112,18 +1334,20 @@ impl QwertoneApp {
             });
         });
         ui.add_space(8.0);
+        let label = self.cap_label();
         KeyboardView {
             keymap: &self.keymap,
             palette: &p,
-            base_note: self.base_note(),
             held: &self.held,
             selected: None,
             show_notes: false,
+            label: &label,
         }
         .show(ui);
         ui.label(
             RichText::new(
-                "Sound is muted on this tab. Shift, Ctrl, Alt and Caps aren't tested here.",
+                "Sound is muted on this tab. Shift, Ctrl and Alt are tested (left and right \
+                 count as the same key); Caps and Super aren't.",
             )
             .color(p.on_surface_variant),
         );
@@ -1142,6 +1366,7 @@ impl eframe::App for QwertoneApp {
                 Event::WindowFocused(false) => {
                     // Alt-tab with keys held would leave notes stuck.
                     self.held.clear();
+                    self.mod_keys.clear();
                     self.all_notes_off();
                     keep.push(ev);
                 }
@@ -1152,48 +1377,17 @@ impl eframe::App for QwertoneApp {
                     repeat,
                     modifiers,
                 } => {
-                    let k = physical_key.unwrap_or(*key);
-                    let (pressed, repeat) = (*pressed, *repeat);
-                    if pressed {
-                        self.held.insert(k);
-                    } else {
-                        self.held.remove(&k);
-                    }
-                    if self.tab == Tab::KeyTest {
-                        if self.held.len() > self.max_held {
-                            self.max_held = self.held.len();
-                            self.best_combo = self.held.iter().copied().collect();
-                            self.best_combo.sort_by_key(|k| k.name());
-                        }
-                        // Still release notes that were playing before switching tab.
-                        if !pressed {
-                            self.play_key(k, false, false);
-                        }
-                        continue;
-                    }
-                    if let Some((from, action)) = self.capture_for {
-                        if pressed && !repeat {
-                            self.capture_key(k, from, action);
-                        }
-                        continue;
-                    }
-                    if self.tap.running && k == Key::Space {
-                        if pressed && !repeat {
-                            self.tap.tap(Instant::now());
-                        }
-                        continue;
-                    }
-                    if typing || modifiers.ctrl || modifiers.command || modifiers.alt {
-                        // Let shortcuts and text fields work, but never leave notes hanging.
-                        if !pressed {
-                            self.play_key(k, false, false);
-                        }
-                        keep.push(ev);
-                        continue;
-                    }
-                    if !self.play_key(k, pressed, repeat) {
+                    // Shift/Ctrl/Alt first, so Shift+B plays B's chord as a 7th.
+                    self.sync_modifiers(*modifiers, typing);
+                    let k = KeyId::Key(physical_key.unwrap_or(*key));
+                    if !self.handle_input(k, *pressed, *repeat, *modifiers, typing) {
                         keep.push(ev);
                     }
+                }
+                Event::ModifiersChanged(m) => {
+                    // Shift / Ctrl / Alt pressed or released on their own.
+                    self.sync_modifiers(*m, typing);
+                    keep.push(ev);
                 }
                 _ => keep.push(ev),
             }
@@ -1237,7 +1431,17 @@ impl eframe::App for QwertoneApp {
                             .fill(p.surface_container_highest)
                             .corner_radius(egui::CornerRadius::same(16))
                             .inner_margin(egui::Margin::symmetric(18, 12))
-                            .show(ui, |ui| ui.label(RichText::new(msg).color(p.on_surface)));
+                            .show(ui, |ui| {
+                                // Size to the text, wrapping only long messages.
+                                let font = egui::TextStyle::Body.resolve(ui.style());
+                                let w = ui
+                                    .painter()
+                                    .layout_no_wrap(msg.clone(), font, p.on_surface)
+                                    .size()
+                                    .x;
+                                ui.set_width(w.min(640.0));
+                                ui.label(RichText::new(msg).color(p.on_surface))
+                            });
                     });
                 ctx.request_repaint_after(Duration::from_millis(250));
             } else {
@@ -1245,8 +1449,13 @@ impl eframe::App for QwertoneApp {
             }
         }
 
-        // Keep polling files/devices/clicks without burning CPU.
-        let next = if self.tap.running { 30 } else { 500 };
+        // Keep polling files/devices/clicks without burning CPU; redraw
+        // often while the beat display is moving.
+        let next = if self.tap.running || self.rhythm_running() {
+            30
+        } else {
+            500
+        };
         ctx.request_repaint_after(Duration::from_millis(next));
     }
 

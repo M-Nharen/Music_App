@@ -117,6 +117,56 @@ pub const INSTRUMENTS: &[Instrument] = &[
         program: 94,
         bt_friendly: true,
     },
+    // Added in Part 2 (appended so saved indices stay valid).
+    Instrument {
+        name: "Steel Guitar",
+        program: 25,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Harp",
+        program: 46,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Marimba",
+        program: 12,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Accordion",
+        program: 21,
+        bt_friendly: true,
+    },
+];
+
+/// Sounds for the accompaniment bass line.
+pub const BASS_SOUNDS: &[Instrument] = &[
+    Instrument {
+        name: "Electric Bass",
+        program: 33,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Acoustic Bass",
+        program: 32,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Picked Bass",
+        program: 34,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Fretless Bass",
+        program: 35,
+        bt_friendly: true,
+    },
+    Instrument {
+        name: "Synth Bass",
+        program: 38,
+        bt_friendly: false,
+    },
 ];
 
 /// Name the chord formed by these MIDI notes, e.g. [60, 64, 67] -> "C".

@@ -2,7 +2,7 @@
 
 Play music on your laptop keyboard. Built for Arch + Hyprland (end4 rice), works over Bluetooth earbuds, and lets you remap every key.
 
-> **Status: Part 1 of 9.** Low-latency engine, Piano layout, keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
+> **Status: Part 2 of 9.** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
 
 ## Install (Arch)
 
@@ -38,6 +38,10 @@ Colours follow end4's Material You palette automatically (from `~/.local/state/q
 
 ## Playing
 
+Pick a layout at the top of the **Play** tab, or press `F1` to cycle through them.
+
+### Piano
+
 | Keys | What they do |
 |---|---|
 | `Z X C V B N M , . /` | White keys, lower octave (starts at C3) |
@@ -52,6 +56,51 @@ Colours follow end4's Material You palette automatically (from `~/.local/state/q
 | `Esc` | Stop all sound |
 
 The big readout names whatever chord you're holding (try `Z C B` = C major, `N Q E` = A minor).
+
+### Chords + Melody (easiest)
+
+Left hand plays a whole chord with one key, right hand plays a melody that can't hit a wrong note.
+
+| Keys | What they do |
+|---|---|
+| `Z X C V B N M` | The 7 chords of the key: I ii iii IV V vi vii°. In C major: C Dm Em F G Am Bdim |
+| `A S D F G H J` | "Borrowed" chords for extra colour: i II bIII iv III bVI bVII (in C: Cm D Eb Fm E Ab Bb) |
+| hold `Shift` or `1` | add the 7th (G → G7) |
+| hold `Alt` or `2` | sus4 (C → Csus4) |
+| hold `3` | add9 |
+| hold `Ctrl` or `4` | swap major ↔ minor (Am → A) |
+| `Q W E R T Y U I O P [ ]` | Melody, locked to the scale |
+| `Enter` | Start / stop the rhythm |
+| `Backspace` | Next style (block → strum → arpeggio → patterns) |
+| `-` / `=` | Slower / faster |
+| `\` | Next scale (major, minor, dorian, blues…) |
+| `← / →` | Change key |
+| `Space` | Pedal: holds the chord |
+
+The key caps show the actual chord names and numerals, and they change live while you hold a modifier. Try `Z B N V` (C G Am F), the chords of hundreds of pop songs.
+
+**Styles** (Style menu or `Backspace`):
+
+- **Block chords**: the chord sounds while you hold the key.
+- **Strum**: notes roll in low to high like a guitar (speed adjustable).
+- **Arpeggio**: the chord's notes one at a time, up / down / up-and-down / random, in 8ths, triplets or 16ths, over 1–3 octaves.
+- **Patterns**: a backing band. Pop, Ballad, Country, Rock, Waltz, Reggae, Bossa nova, Dance, Alberti and Shuffle, with bass and drums. Tap a chord once and it keeps playing ("Keep playing after I let go"); press another chord to change, `Enter` to stop.
+
+**Smooth chords** (on by default) picks the inversion that moves your hand least, like a pianist does: C → F plays C-F-A instead of jumping up to F-A-C.
+
+**Bluetooth:** the rhythm keeps perfect time inside the app, but you hear it ~200 ms late, so you'll naturally press chord changes a little late. Qwertone uses your measured latency (Audio tab) to let a chord pressed just after the beat still land on that beat.
+
+### Isomorphic
+
+Every key to the right is a whole step, up-left is a fourth, up-right is a fifth. Every chord and scale has the same shape in every key: a major chord is always "this key, two keys right, and the key up-right" (`Z C S` = C E G).
+
+### Drums
+
+Bottom row kicks, snares, claps; home row hi-hats, ride, congas; Q-row toms and crashes; Space is a kick. `Enter` plays the current pattern's beat so you can drum along.
+
+### Key and scale
+
+The **Key** and **Scale** pickers on the Play tab apply to every layout. Keys get a • if their note is in the scale and a ★ on the key's home note. **Scale lock** makes piano/isomorphic keys play the nearest scale note instead, so nothing sounds wrong.
 
 ## Keybinds
 
@@ -72,9 +121,42 @@ Space = "sustain"
 Up = "octave+"
 ```
 
-Actions: `note <n>`, `sustain`, `octave+`, `octave-`, `transpose+`, `transpose-`, `instrument+`, `instrument-`, `velocity`, `panic`.
+Shift, Ctrl and Alt can be bound too (`Shift = "mod 7th"`). Click them on the drawn keyboard like any other key.
 
-Settings live in `~/.config/qwertone/config.toml` and reload on save too.
+Actions:
+
+| Action | Meaning |
+|---|---|
+| `note <n>` | A fixed note, `n` semitones above the layout's lowest C |
+| `melody <n>` | Scale step `n` above the key's home note (always in key) |
+| `chord <1-7>` | The chord on that scale step |
+| `chord <numeral>` | A fixed chord: `bVII`, `bVI`, `bIII`, `iv`, `II`, `III`, `v`, `vii°`, `III+` … (upper case = major, lower = minor) |
+| `mod 7th` / `mod sus4` / `mod add9` / `mod swap` | Hold to change the chord |
+| `drum <name>` | `kick`, `snare`, `clap`, `rim`, `hat`, `pedalhat`, `openhat`, `ride`, `bell`, `crash`, `splash`, `china`, `lowtom`, `midtom`, `hitom`, `floortom`, `tamb`, `shaker`, `cowbell`, `claves`, `conga`, `bongo` … or a General MIDI number |
+| `sustain`, `octave+`, `octave-`, `transpose+`, `transpose-`, `instrument+`, `instrument-`, `velocity`, `panic` | As in Part 1 |
+| `rhythm`, `style+`, `style-`, `tempo+`, `tempo-`, `scale+`, `scale-lock`, `layout+` | Accompaniment and layout controls |
+
+**Reset to…** restores any layout to one of the four built-in ones.
+
+### Your own accompaniment patterns
+
+Patterns are text files in `~/.config/qwertone/patterns/` (there's an example, `shuffle.toml`). One line per part, one character per step, like a drum machine:
+
+```toml
+name = "My groove"
+beats = 4
+steps_per_beat = 4          # 16th notes
+[tracks]
+bass  = "x-------x---5---"  # x root, 5 fifth, 8 octave, - hold
+chord = "..x...x...x...x."  # x whole chord, 1-9 single chord notes
+kick  = "x.......x.x....."
+snare = "....x.......x..."
+hat   = "x.x.x.x.x.x.x.x."  # X loud, o soft
+```
+
+Then **Play → Sounds & patterns → Reload patterns**.
+
+Settings live in `~/.config/qwertone/config.toml` and reload on save too (key, scale, style, tempo, chord and bass sounds are all in there).
 
 ## Bluetooth earbuds (Galaxy Buds Live, Sony XM4…)
 
@@ -98,13 +180,17 @@ Bluetooth adds roughly 150–250 ms of delay. That comes from the earbuds and th
 ```
 src/
   audio/        real-time engine (PipeWire via cpal), SoundFont + built-in synth
-  keymap.rs     keybind model and TOML format
+  audio/sequencer.rs  strum, arpeggiator, accompaniment (runs in the audio thread)
+  audio/patterns.rs   accompaniment pattern format + built-in patterns
+  keymap.rs     keybind model, TOML format, the four built-in layouts
+  theory.rs     scales, chords, roman numerals, voice-leading
+  drums.rs      General MIDI drum names
   config.rs     settings, keymap files, SoundFont search, file watching
   devices.rs    current output / Bluetooth codec detection via pactl
   latency.rs    tap-along latency measurement
   theme.rs      end4 / Material You colours and fonts
   music.rs      note names, chord naming, instruments
-  ui/           egui app and custom widgets
+  ui/           egui app (app.rs, app/play.rs, app/keybinds.rs) and custom widgets
 ```
 
 Run the tests with `cargo test`.

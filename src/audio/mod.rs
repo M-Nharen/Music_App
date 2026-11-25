@@ -5,13 +5,17 @@
 //! heard on the very next buffer (~1.3 ms at 64 frames / 48 kHz).
 
 pub mod builtin;
+pub mod patterns;
+pub mod sequencer;
 
 use anyhow::{Context, Result, anyhow};
 use builtin::BuiltinSynth;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, OutputCallbackInfo, SizedSample};
 use crossbeam_channel::{Receiver, Sender, unbounded};
+use patterns::Pattern;
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
+use sequencer::{CH_DRUMS, ChordNotes, SeqEvent, Sequencer, StyleParams};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -37,6 +41,29 @@ pub enum Command {
         bpm: f32,
         on: bool,
     },
+    /// Instrument for one channel (1 = chords, 2 = bass).
+    ChannelProgram {
+        channel: u8,
+        program: u8,
+    },
+    /// Chord key pressed (`Some`) or released (`None`). `retrigger` is
+    /// false when only a modifier changed the chord.
+    Chord {
+        chord: Option<ChordNotes>,
+        retrigger: bool,
+        velocity: u8,
+    },
+    Style(StyleParams),
+    /// Patterns are owned by the UI too, so the audio thread never frees one.
+    Pattern(Option<Arc<Pattern>>),
+    Tempo(f32),
+    /// Start / stop the accompaniment rhythm.
+    Rhythm(bool),
+    /// One drum hit (General MIDI drum note).
+    Drum {
+        note: u8,
+        velocity: u8,
+    },
 }
 
 /// Numbers the UI shows about the engine. Written by the audio thread.
@@ -51,6 +78,11 @@ pub struct Stats {
     pub callbacks: AtomicU64,
     pub errors: AtomicU32,
     pub soundfont_active: AtomicBool,
+    /// Accompaniment clock, for the beat display.
+    pub seq_running: AtomicBool,
+    pub seq_step: AtomicU32,
+    pub seq_steps_per_bar: AtomicU32,
+    pub seq_steps_per_beat: AtomicU32,
     pub host: Mutex<String>,
     pub device: Mutex<String>,
 }
@@ -65,6 +97,7 @@ impl Stats {
     }
 }
 
+#[allow(clippy::large_enum_variant)] // only one exists, never moved in the hot path
 enum Backend {
     Builtin(BuiltinSynth),
     SoundFont(Box<Synthesizer>),
@@ -86,7 +119,8 @@ struct Renderer {
     click_tx: Sender<Instant>,
     stats: Arc<Stats>,
     sample_rate: u32,
-    program: u8,
+    /// Programs for channels 0 (melody), 1 (chords), 2 (bass).
+    programs: [u8; 3],
     volume: f32,
     sustain: bool,
     held: [bool; 128],
@@ -95,6 +129,7 @@ struct Renderer {
     right: Vec<f32>,
     sample_clock: u64,
     metro: Metronome,
+    seq: Sequencer,
 }
 
 const CLICK_LEN: usize = 1200;
@@ -109,7 +144,9 @@ impl Renderer {
         stats: Arc<Stats>,
     ) -> Self {
         let mut builtin = BuiltinSynth::new(sample_rate);
-        builtin.set_program(program);
+        for ch in 0..3 {
+            builtin.set_program(ch, program);
+        }
         Renderer {
             backend: Backend::Builtin(builtin),
             builtin_fallback: BuiltinSynth::new(sample_rate),
@@ -117,7 +154,7 @@ impl Renderer {
             click_tx,
             stats,
             sample_rate,
-            program,
+            programs: [program; 3],
             volume,
             sustain: false,
             held: [false; 128],
@@ -132,6 +169,7 @@ impl Renderer {
                 beat: 0,
                 click_pos: None,
             },
+            seq: Sequencer::new(sample_rate),
         }
     }
 
@@ -148,10 +186,14 @@ impl Renderer {
                 }
                 self.held[n] = true;
                 self.sustained[n] = false;
-                match &mut self.backend {
-                    Backend::Builtin(s) => s.note_on(note, velocity),
-                    Backend::SoundFont(s) => s.note_on(0, note, velocity),
-                }
+                backend_event(
+                    &mut self.backend,
+                    SeqEvent::On {
+                        ch: 0,
+                        note: n as u8,
+                        vel: velocity.clamp(1, 127) as u8,
+                    },
+                );
             }
             Command::NoteOff { note } => {
                 if !(0..128).contains(&note) {
@@ -167,6 +209,8 @@ impl Renderer {
             }
             Command::Sustain(on) => {
                 self.sustain = on;
+                let (seq, backend) = (&mut self.seq, &mut self.backend);
+                seq.set_pedal(on, self.sample_clock, &mut |e| backend_event(backend, e));
                 if !on {
                     for n in 0..128 {
                         if self.sustained[n] && !self.held[n] {
@@ -177,24 +221,33 @@ impl Renderer {
                 }
             }
             Command::Program(p) => {
-                self.program = p;
+                self.programs[0] = p;
                 self.apply_program();
+            }
+            Command::ChannelProgram { channel, program } => {
+                if let Some(slot) = self.programs.get_mut(channel as usize) {
+                    *slot = program;
+                    self.apply_program();
+                }
             }
             Command::Volume(v) => self.volume = v.clamp(0.0, 2.0),
             Command::AllOff => {
                 self.held = [false; 128];
                 self.sustained = [false; 128];
+                self.seq.reset();
                 match &mut self.backend {
                     Backend::Builtin(s) => s.all_off(),
                     Backend::SoundFont(s) => s.note_off_all(true),
                 }
             }
             Command::UseSoundFont(synth) => {
+                self.seq.reset();
                 self.backend = Backend::SoundFont(synth);
                 self.stats.soundfont_active.store(true, Ordering::Relaxed);
                 self.apply_program();
             }
             Command::UseBuiltin => {
+                self.seq.reset();
                 let mut b = BuiltinSynth::new(self.sample_rate);
                 std::mem::swap(&mut b, &mut self.builtin_fallback);
                 self.backend = Backend::Builtin(b);
@@ -208,21 +261,53 @@ impl Renderer {
                 self.metro.next_at = self.sample_clock + self.sample_rate as u64 / 4;
                 self.metro.beat = 0;
             }
+            Command::Drum { note, velocity } => {
+                backend_event(
+                    &mut self.backend,
+                    SeqEvent::On {
+                        ch: CH_DRUMS,
+                        note,
+                        vel: velocity,
+                    },
+                );
+            }
+            cmd => {
+                let now = self.sample_clock;
+                let (seq, backend) = (&mut self.seq, &mut self.backend);
+                let mut out = |e| backend_event(backend, e);
+                match cmd {
+                    Command::Chord {
+                        chord,
+                        retrigger,
+                        velocity,
+                    } => seq.set_chord(chord, retrigger, velocity, now, &mut out),
+                    Command::Style(p) => seq.set_style(p, now, &mut out),
+                    Command::Pattern(p) => seq.set_pattern(p, now, &mut out),
+                    Command::Tempo(bpm) => seq.set_tempo(bpm),
+                    Command::Rhythm(on) => seq.set_running(on, now, &mut out),
+                    _ => {}
+                }
+            }
         }
     }
 
     fn backend_off(&mut self, note: i32) {
-        match &mut self.backend {
-            Backend::Builtin(s) => s.note_off(note),
-            Backend::SoundFont(s) => s.note_off(0, note),
-        }
+        backend_event(
+            &mut self.backend,
+            SeqEvent::Off {
+                ch: 0,
+                note: note.clamp(0, 127) as u8,
+            },
+        );
     }
 
     fn apply_program(&mut self) {
-        match &mut self.backend {
-            Backend::Builtin(s) => s.set_program(self.program),
-            // 0xC0 = program change.
-            Backend::SoundFont(s) => s.process_midi_message(0, 0xC0, self.program as i32, 0),
+        for (ch, &prog) in self.programs.iter().enumerate() {
+            match &mut self.backend {
+                Backend::Builtin(s) => s.set_program(ch as u8, prog),
+                // 0xC0 = program change.
+                Backend::SoundFont(s) => s.process_midi_message(ch as i32, 0xC0, prog as i32, 0),
+            }
         }
     }
 
@@ -237,16 +322,44 @@ impl Renderer {
             self.left.resize(frames, 0.0);
             self.right.resize(frames, 0.0);
         }
-        let (l, r) = (&mut self.left[..frames], &mut self.right[..frames]);
-        match &mut self.backend {
-            Backend::Builtin(s) => {
-                s.render(l, r);
-                self.stats
-                    .active_voices
-                    .store(s.active_voices() as u32, Ordering::Relaxed);
+        // Render in pieces, split wherever the sequencer has something to
+        // play, so accompaniment timing is exact to the sample.
+        let mut pos = 0;
+        while pos < frames {
+            let now = self.sample_clock + pos as u64;
+            {
+                let (seq, backend) = (&mut self.seq, &mut self.backend);
+                seq.process(now, &mut |e| backend_event(backend, e));
             }
-            Backend::SoundFont(s) => s.render(l, r),
+            let end = match self.seq.next_time() {
+                Some(t) => ((t.max(now + 1) - self.sample_clock) as usize).min(frames),
+                None => frames,
+            };
+            let (l, r) = (&mut self.left[pos..end], &mut self.right[pos..end]);
+            match &mut self.backend {
+                Backend::Builtin(s) => s.render(l, r),
+                Backend::SoundFont(s) => s.render(l, r),
+            }
+            pos = end;
         }
+        if let Backend::Builtin(s) = &self.backend {
+            self.stats
+                .active_voices
+                .store(s.active_voices() as u32, Ordering::Relaxed);
+        }
+        self.stats
+            .seq_running
+            .store(self.seq.running(), Ordering::Relaxed);
+        self.stats
+            .seq_step
+            .store(self.seq.current_step(), Ordering::Relaxed);
+        self.stats
+            .seq_steps_per_bar
+            .store(self.seq.steps_per_bar(), Ordering::Relaxed);
+        self.stats
+            .seq_steps_per_beat
+            .store(self.seq.steps_per_beat(), Ordering::Relaxed);
+        let (l, r) = (&mut self.left[..frames], &mut self.right[..frames]);
 
         // Metronome clicks (latency test).
         if self.metro.on {
@@ -310,6 +423,29 @@ impl Renderer {
             .buffer_frames
             .store(frames as u32, Ordering::Relaxed);
         self.stats.callbacks.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// Send one note event to whichever synth is active.
+fn backend_event(backend: &mut Backend, e: SeqEvent) {
+    match (backend, e) {
+        (
+            Backend::Builtin(s),
+            SeqEvent::On {
+                ch: CH_DRUMS,
+                note,
+                vel,
+            },
+        ) => s.drum(note, vel),
+        (Backend::Builtin(_), SeqEvent::Off { ch: CH_DRUMS, .. }) => {}
+        (Backend::Builtin(s), SeqEvent::On { ch, note, vel }) => {
+            s.note_on(ch, note as i32, vel as i32)
+        }
+        (Backend::Builtin(s), SeqEvent::Off { ch, note }) => s.note_off(ch, note as i32),
+        (Backend::SoundFont(s), SeqEvent::On { ch, note, vel }) => {
+            s.note_on(ch as i32, note as i32, vel as i32)
+        }
+        (Backend::SoundFont(s), SeqEvent::Off { ch, note }) => s.note_off(ch as i32, note as i32),
     }
 }
 
@@ -508,6 +644,38 @@ mod tests {
         tx.send(Command::Sustain(false)).unwrap();
         r.render_block(256, Instant::now());
         assert!(!r.sustained[60]);
+    }
+
+    #[test]
+    fn accompaniment_plays_through_the_renderer() {
+        let (mut r, tx, _) = renderer();
+        tx.send(Command::Tempo(120.0)).unwrap();
+        tx.send(Command::Style(StyleParams {
+            kind: sequencer::StyleKind::Arp,
+            ..Default::default()
+        }))
+        .unwrap();
+        tx.send(Command::Chord {
+            chord: Some(ChordNotes::new(&[60, 64, 67], Some(48))),
+            retrigger: true,
+            velocity: 100,
+        })
+        .unwrap();
+        let mut loud = 0.0f32;
+        for _ in 0..100 {
+            r.render_block(128, Instant::now());
+            loud = loud.max(peak(&r, 128));
+        }
+        assert!(loud > 0.01);
+        assert!(r.stats.seq_running.load(Ordering::Relaxed));
+        tx.send(Command::Drum {
+            note: 38,
+            velocity: 120,
+        })
+        .unwrap();
+        tx.send(Command::AllOff).unwrap();
+        r.render_block(128, Instant::now());
+        assert!(!r.seq.running());
     }
 
     #[test]

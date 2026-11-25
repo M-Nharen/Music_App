@@ -51,6 +51,16 @@ fn patch_for_program(program: u8) -> Patch {
             brightness_decay: 0.0,
             detune_cents: 0.0,
         },
+        // Basses: plucky and round.
+        32..=39 => Patch {
+            attack: 0.003,
+            decay: 1.4,
+            sustain: 0.3,
+            release: 0.1,
+            harmonics: [1.0, 0.55, 0.25, 0.1, 0.05, 0.02],
+            brightness_decay: 6.0,
+            detune_cents: 0.0,
+        },
         // Guitars: plucky.
         24..=31 => Patch {
             attack: 0.003,
@@ -95,6 +105,10 @@ enum Stage {
 
 #[derive(Clone, Copy)]
 struct Voice {
+    ch: u8,
+    patch: Patch,
+    /// Frequency ratio of the second, detuned oscillator.
+    detune: f32,
     note: i32,
     freq: f32,
     amp: f32,
@@ -107,8 +121,10 @@ struct Voice {
 
 pub struct BuiltinSynth {
     sample_rate: f32,
-    patch: Patch,
+    /// Patch per MIDI channel.
+    patches: [Patch; 16],
     voices: Vec<Voice>,
+    drums: DrumKit,
 }
 
 const MAX_VOICES: usize = 48;
@@ -117,22 +133,30 @@ impl BuiltinSynth {
     pub fn new(sample_rate: u32) -> Self {
         Self {
             sample_rate: sample_rate as f32,
-            patch: patch_for_program(0),
+            patches: [patch_for_program(0); 16],
             voices: Vec::with_capacity(MAX_VOICES),
+            drums: DrumKit::new(sample_rate as f32),
         }
     }
 
-    pub fn set_program(&mut self, program: u8) {
-        self.patch = patch_for_program(program);
+    pub fn set_program(&mut self, ch: u8, program: u8) {
+        self.patches[ch as usize & 15] = patch_for_program(program);
     }
 
-    pub fn note_on(&mut self, note: i32, velocity: i32) {
+    pub fn drum(&mut self, note: u8, velocity: u8) {
+        self.drums.hit(note, velocity);
+    }
+
+    pub fn note_on(&mut self, ch: u8, note: i32, velocity: i32) {
         if self.voices.len() >= MAX_VOICES {
             // Steal the oldest voice.
             self.voices.remove(0);
         }
         let v = velocity.clamp(1, 127) as f32 / 127.0;
         self.voices.push(Voice {
+            ch,
+            patch: self.patches[ch as usize & 15],
+            detune: 2f32.powf(self.patches[ch as usize & 15].detune_cents / 1200.0),
             note,
             freq: midi_to_hz(note as f32),
             amp: v * v * 0.22,
@@ -144,9 +168,9 @@ impl BuiltinSynth {
         });
     }
 
-    pub fn note_off(&mut self, note: i32) {
+    pub fn note_off(&mut self, ch: u8, note: i32) {
         for v in self.voices.iter_mut() {
-            if v.note == note && v.stage != Stage::Release && v.stage != Stage::Done {
+            if v.ch == ch && v.note == note && v.stage != Stage::Release && v.stage != Stage::Done {
                 v.stage = Stage::Release;
                 v.release_from = v.env;
             }
@@ -155,19 +179,20 @@ impl BuiltinSynth {
 
     pub fn all_off(&mut self) {
         self.voices.clear();
+        self.drums.voices.clear();
     }
 
     pub fn active_voices(&self) -> usize {
-        self.voices.len()
+        self.voices.len() + self.drums.voices.len()
     }
 
     pub fn render(&mut self, left: &mut [f32], right: &mut [f32]) {
         let dt = 1.0 / self.sample_rate;
-        let p = self.patch;
-        let detune = 2f32.powf(p.detune_cents / 1200.0);
         for (l, r) in left.iter_mut().zip(right.iter_mut()) {
             let mut sum = 0.0;
             for v in self.voices.iter_mut() {
+                let p = v.patch;
+                let detune = v.detune;
                 // Envelope.
                 match v.stage {
                     Stage::Attack => {
@@ -222,12 +247,169 @@ impl BuiltinSynth {
                 v.phase[0] = (v.phase[0] + v.freq * dt).fract();
                 v.phase[1] = (v.phase[1] + v.freq * detune * dt).fract();
             }
+            sum += self.drums.next();
             // Soft clip so big chords never crackle.
             let out = sum.tanh();
             *l = out;
             *r = out;
         }
         self.voices.retain(|v| v.stage != Stage::Done);
+        self.drums.voices.retain(|v| v.age < v.kit.length);
+    }
+}
+
+/// Synthesised drum sounds for when there's no SoundFont: a pitched sine
+/// (kick, toms) plus filtered noise (snare, hats, cymbals).
+#[derive(Clone, Copy)]
+struct DrumPatch {
+    /// Tone start / end frequency and how fast it slides (per second).
+    f0: f32,
+    f1: f32,
+    sweep: f32,
+    /// Second tone (cowbell), 0 = none.
+    f2: f32,
+    tone: f32,
+    tone_decay: f32,
+    noise: f32,
+    noise_decay: f32,
+    /// High-pass amount for the noise, 0..1 (1 = only hiss).
+    highpass: f32,
+    length: f32,
+}
+
+#[allow(clippy::too_many_arguments)]
+const fn dp(
+    f0: f32,
+    f1: f32,
+    sweep: f32,
+    tone: f32,
+    tone_decay: f32,
+    noise: f32,
+    noise_decay: f32,
+    highpass: f32,
+) -> DrumPatch {
+    let longest = if tone_decay > noise_decay {
+        tone_decay
+    } else {
+        noise_decay
+    };
+    DrumPatch {
+        f0,
+        f1,
+        sweep,
+        f2: 0.0,
+        tone,
+        tone_decay,
+        noise,
+        noise_decay,
+        highpass,
+        length: longest * 7.0,
+    }
+}
+
+fn drum_patch(note: u8) -> DrumPatch {
+    match note {
+        35 | 36 => dp(160.0, 48.0, 28.0, 1.0, 0.16, 0.05, 0.01, 0.0),
+        38 | 40 => dp(220.0, 180.0, 20.0, 0.45, 0.06, 0.8, 0.09, 0.4),
+        37 => dp(1700.0, 1600.0, 5.0, 0.4, 0.012, 0.5, 0.01, 0.6),
+        39 => dp(0.0, 0.0, 0.0, 0.0, 0.01, 0.9, 0.07, 0.6),
+        42 | 44 => dp(0.0, 0.0, 0.0, 0.0, 0.01, 0.5, 0.025, 0.95),
+        46 => dp(0.0, 0.0, 0.0, 0.0, 0.01, 0.45, 0.18, 0.95),
+        49 | 52 | 55 | 57 => dp(0.0, 0.0, 0.0, 0.0, 0.01, 0.4, 0.5, 0.9),
+        51 | 59 => dp(3200.0, 3200.0, 0.0, 0.06, 0.4, 0.25, 0.3, 0.95),
+        53 => dp(2600.0, 2600.0, 0.0, 0.25, 0.3, 0.1, 0.1, 0.95),
+        41 | 43 => dp(130.0, 80.0, 12.0, 0.9, 0.2, 0.08, 0.03, 0.2),
+        45 | 47 => dp(170.0, 110.0, 12.0, 0.9, 0.18, 0.08, 0.03, 0.2),
+        48 | 50 => dp(220.0, 150.0, 12.0, 0.9, 0.16, 0.08, 0.03, 0.2),
+        54 | 69 | 70 | 82 => dp(0.0, 0.0, 0.0, 0.0, 0.01, 0.35, 0.04, 0.9),
+        56 => DrumPatch {
+            f2: 845.0,
+            ..dp(560.0, 560.0, 0.0, 0.5, 0.08, 0.0, 0.01, 0.0)
+        },
+        75..=77 => dp(2400.0, 2300.0, 5.0, 0.7, 0.025, 0.05, 0.005, 0.5),
+        60..=64 => dp(420.0, 300.0, 20.0, 0.8, 0.1, 0.06, 0.01, 0.3),
+        _ => dp(800.0, 600.0, 10.0, 0.3, 0.05, 0.4, 0.05, 0.6),
+    }
+}
+
+#[derive(Clone, Copy)]
+struct DrumVoice {
+    kit: DrumPatch,
+    amp: f32,
+    age: f32,
+    phase: f32,
+    phase2: f32,
+    lp: f32,
+}
+
+struct DrumKit {
+    sample_rate: f32,
+    voices: Vec<DrumVoice>,
+    rng: u32,
+}
+
+impl DrumKit {
+    fn new(sample_rate: f32) -> Self {
+        DrumKit {
+            sample_rate,
+            voices: Vec::with_capacity(32),
+            rng: 0x1234_5678,
+        }
+    }
+
+    fn hit(&mut self, note: u8, velocity: u8) {
+        if self.voices.len() >= 32 {
+            self.voices.remove(0);
+        }
+        // A new hi-hat chokes the open one, like a real kit.
+        if matches!(note, 42 | 44) {
+            self.voices
+                .retain(|v| v.kit.noise_decay != drum_patch(46).noise_decay);
+        }
+        let v = velocity.clamp(1, 127) as f32 / 127.0;
+        self.voices.push(DrumVoice {
+            kit: drum_patch(note),
+            amp: v * v * 0.6,
+            age: 0.0,
+            phase: 0.0,
+            phase2: 0.0,
+            lp: 0.0,
+        });
+    }
+
+    fn next(&mut self) -> f32 {
+        if self.voices.is_empty() {
+            return 0.0;
+        }
+        let dt = 1.0 / self.sample_rate;
+        let mut sum = 0.0;
+        for v in self.voices.iter_mut() {
+            let k = v.kit;
+            let mut s = 0.0;
+            if k.tone > 0.0 {
+                let f = k.f1 + (k.f0 - k.f1) * (-v.age * k.sweep).exp();
+                v.phase = (v.phase + f * dt).fract();
+                let mut t = (v.phase * TAU).sin();
+                if k.f2 > 0.0 {
+                    v.phase2 = (v.phase2 + k.f2 * dt).fract();
+                    // Square-ish for the cowbell clank.
+                    t = (t + (v.phase2 * TAU).sin()).signum() * 0.5;
+                }
+                s += t * k.tone * (-v.age / k.tone_decay).exp();
+            }
+            if k.noise > 0.0 {
+                self.rng ^= self.rng << 13;
+                self.rng ^= self.rng >> 17;
+                self.rng ^= self.rng << 5;
+                let white = (self.rng as f32 / u32::MAX as f32) * 2.0 - 1.0;
+                v.lp += (white - v.lp) * 0.35;
+                let shaped = k.highpass * (white - v.lp) + (1.0 - k.highpass) * v.lp;
+                s += shaped * k.noise * (-v.age / k.noise_decay).exp();
+            }
+            v.age += dt;
+            sum += s * v.amp;
+        }
+        sum
     }
 }
 
@@ -238,15 +420,45 @@ mod tests {
     #[test]
     fn makes_sound_and_stops() {
         let mut s = BuiltinSynth::new(48_000);
-        s.note_on(60, 100);
+        s.note_on(0, 60, 100);
         let mut l = vec![0.0; 4800];
         let mut r = vec![0.0; 4800];
         s.render(&mut l, &mut r);
         assert!(l.iter().any(|x| x.abs() > 0.01));
-        s.note_off(60);
+        s.note_off(0, 60);
         for _ in 0..20 {
             s.render(&mut l, &mut r);
         }
         assert_eq!(s.active_voices(), 0);
+    }
+
+    #[test]
+    fn drums_make_sound_and_end() {
+        let mut s = BuiltinSynth::new(48_000);
+        for n in [36, 38, 42, 46, 49, 56, 75] {
+            s.drum(n, 110);
+        }
+        let mut l = vec![0.0; 4800];
+        let mut r = vec![0.0; 4800];
+        s.render(&mut l, &mut r);
+        assert!(l.iter().any(|x| x.abs() > 0.05));
+        for _ in 0..80 {
+            s.render(&mut l, &mut r);
+        }
+        assert_eq!(s.active_voices(), 0, "drum hits finish on their own");
+    }
+
+    #[test]
+    fn channels_have_their_own_sound() {
+        let mut s = BuiltinSynth::new(48_000);
+        s.set_program(2, 33);
+        s.note_on(2, 40, 100);
+        s.note_on(0, 60, 100);
+        s.note_off(0, 40); // wrong channel: bass keeps going
+        assert!(
+            s.voices
+                .iter()
+                .any(|v| v.ch == 2 && v.stage != Stage::Release)
+        );
     }
 }

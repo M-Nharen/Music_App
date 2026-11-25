@@ -3,10 +3,12 @@
 mod audio;
 mod config;
 mod devices;
+mod drums;
 mod keymap;
 mod latency;
 mod music;
 mod theme;
+mod theory;
 mod ui;
 
 fn main() -> eframe::Result {

@@ -1,7 +1,10 @@
 //! Settings in `~/.config/qwertone/`. Everything is plain TOML so it can be
 //! edited by hand; the app notices changes and reloads them.
 
-use crate::keymap::Keymap;
+use crate::audio::patterns::{self, Pattern};
+use crate::audio::sequencer::ArpMode;
+use crate::keymap::{BUILTIN_LAYOUTS, Keymap};
+use crate::theory::Scale;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -53,6 +56,35 @@ pub struct Config {
     pub bluetooth_auto_instrument: bool,
     /// Keyed by the PipeWire sink name.
     pub devices: BTreeMap<String, DeviceProfile>,
+
+    // ---- Chords + Melody (Part 2). The key is set by `transpose`.
+    pub scale: Scale,
+    /// Snap `note` keys to the scale so nothing sounds wrong.
+    pub scale_lock: bool,
+    /// Mark notes of the scale on key caps and the piano strip.
+    pub show_scale: bool,
+    /// Pick chord inversions that move the fewest notes.
+    pub voice_leading: bool,
+    /// Add the chord's root as a bass note.
+    pub chord_bass: bool,
+    /// How chords are played: "block", "strum", "arpeggio" or a pattern name.
+    pub style: String,
+    pub tempo: f32,
+    /// Gap between strummed notes.
+    pub strum_ms: f32,
+    pub arp_mode: ArpMode,
+    /// Arpeggio notes per beat: 2 = 8ths, 3 = triplets, 4 = 16ths.
+    pub arp_rate: u32,
+    pub arp_octaves: u32,
+    /// Play the pattern's drums.
+    pub drums: bool,
+    /// Arpeggio / pattern keeps playing after you let go of the chord key.
+    pub latch: bool,
+    /// Instrument for chords (index into the instrument list); none = same
+    /// as the melody.
+    pub chord_instrument: Option<usize>,
+    /// Bass sound (index into `music::BASS_SOUNDS`).
+    pub bass_instrument: usize,
 }
 
 impl Default for Config {
@@ -69,6 +101,21 @@ impl Default for Config {
             follow_system_theme: true,
             bluetooth_auto_instrument: true,
             devices: BTreeMap::new(),
+            scale: Scale::Major,
+            scale_lock: false,
+            show_scale: true,
+            voice_leading: true,
+            chord_bass: true,
+            style: "block".into(),
+            tempo: 100.0,
+            strum_ms: 30.0,
+            arp_mode: ArpMode::Up,
+            arp_rate: 4,
+            arp_octaves: 1,
+            drums: true,
+            latch: true,
+            chord_instrument: None,
+            bass_instrument: 0,
         }
     }
 }
@@ -89,6 +136,10 @@ pub fn keymaps_dir() -> PathBuf {
 
 pub fn keymap_path(name: &str) -> PathBuf {
     keymaps_dir().join(format!("{name}.toml"))
+}
+
+pub fn patterns_dir() -> PathBuf {
+    config_dir().join("patterns")
 }
 
 impl Config {
@@ -123,14 +174,24 @@ impl Config {
 /// Make sure the built-in keymaps exist on disk, then load the requested one.
 pub fn load_keymap(name: &str) -> (Keymap, Vec<String>) {
     let _ = std::fs::create_dir_all(keymaps_dir());
-    let piano = keymap_path("piano");
-    if !piano.exists() {
-        let _ = write_atomic(&piano, &Keymap::piano().to_toml());
+    for (file, _) in BUILTIN_LAYOUTS {
+        let path = keymap_path(file);
+        if !path.exists()
+            && let Some(km) = Keymap::builtin(file)
+        {
+            let _ = write_atomic(&path, &km.to_toml());
+        }
     }
     let path = keymap_path(name);
     match std::fs::read_to_string(&path) {
         Ok(text) => match Keymap::from_toml(&text) {
-            Ok((km, w)) => (km, w),
+            Ok((mut km, w)) => {
+                // Layouts saved by Part 1 predate the "next layout" key.
+                if !text.contains("layout+") && km.ensure_layout_key() {
+                    let _ = write_atomic(&path, &km.to_toml());
+                }
+                (km, w)
+            }
             Err(e) => (
                 Keymap::piano(),
                 vec![format!("{}: {e} (using Piano)", path.display())],
@@ -178,6 +239,71 @@ pub fn slug(name: &str) -> String {
     let s = s.trim_matches('-').to_string();
     if s.is_empty() { "custom".into() } else { s }
 }
+
+/// Built-in patterns plus any `*.toml` in the patterns folder. A file with
+/// the same name as a built-in replaces it. Returns problems as warnings.
+pub fn load_patterns() -> (Vec<Pattern>, Vec<String>) {
+    let dir = patterns_dir();
+    if !dir.exists() && std::fs::create_dir_all(&dir).is_ok() {
+        let _ = write_atomic(&dir.join("shuffle.toml"), EXAMPLE_PATTERN);
+    }
+    let mut list = patterns::builtin();
+    let mut warnings = Vec::new();
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+        .collect();
+    files.sort();
+    for f in files {
+        let name = f
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        match std::fs::read_to_string(&f)
+            .map_err(|e| e.to_string())
+            .and_then(|t| Pattern::parse(&t))
+        {
+            Ok(p) => match list
+                .iter_mut()
+                .find(|q| q.name.eq_ignore_ascii_case(&p.name))
+            {
+                Some(slot) => *slot = p,
+                None => list.push(p),
+            },
+            Err(e) => warnings.push(format!("pattern {name}: {e}")),
+        }
+    }
+    (list, warnings)
+}
+
+/// Written to the patterns folder on first run, as an example to copy.
+const EXAMPLE_PATTERN: &str = r#"# An accompaniment pattern. Copy this file to make your own; Qwertone
+# loads every .toml in this folder (Chords tab → Reload patterns).
+#
+# One line per part, one character per step:
+#   .  rest        x  hit        X  loud hit      o  soft hit
+#   -  hold the previous note one more step
+#   bass:  x = root, 5 = fifth, 8 = root an octave up
+#   chord: x = whole chord, 1-9 = one chord note (1 = lowest)
+#   any other line is a drum: kick, snare, clap, rim, hat, openhat,
+#   pedalhat, ride, crash, tamb, shaker, cowbell, lowtom, midtom, hitom …
+# Shorter lines repeat. Spaces and | are ignored.
+
+name = "Shuffle"
+description = "Bluesy swung triplet groove. Try the Blues scale and 7th chords."
+beats = 4
+steps_per_beat = 3
+[tracks]
+bass  = "x-5 x-8 x-5 x-8"
+chord = "x.x x.x x.x x.x"
+kick  = "x.. ... x.. ..."
+snare = "... x.. ... x.."
+ride  = "x.x x.x x.x x.x"
+"#;
 
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     let tmp = path.with_extension("toml.tmp");
@@ -282,6 +408,12 @@ mod tests {
         // Missing fields fall back to defaults.
         let partial: Config = toml::from_str("volume = 0.5").unwrap();
         assert_eq!(partial.buffer_frames, 128);
+    }
+
+    #[test]
+    fn example_pattern_parses() {
+        let p = Pattern::parse(EXAMPLE_PATTERN).unwrap();
+        assert_eq!(p.steps.len(), 12);
     }
 
     #[test]

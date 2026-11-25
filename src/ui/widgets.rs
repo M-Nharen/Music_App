@@ -1,6 +1,6 @@
 //! Custom-drawn widgets: the laptop keyboard, the piano strip and cards.
 
-use crate::keymap::{Action, Keymap, key_label};
+use crate::keymap::{Action, KeyId, Keymap};
 use crate::music::{is_black, note_name, pitch_class_name};
 use crate::theme::Palette;
 use egui::{
@@ -9,21 +9,28 @@ use egui::{
 use std::collections::HashSet;
 
 /// One key cap on the drawn keyboard. `key` is None for keys the app can't
-/// see (Shift, Caps…), which are drawn greyed out for orientation.
+/// see (Caps, Super…), which are drawn greyed out for orientation.
 struct Cap {
-    key: Option<Key>,
+    key: Option<KeyId>,
     label: &'static str,
     width: f32,
 }
 
 const fn k(key: Key) -> Cap {
     Cap {
-        key: Some(key),
+        key: Some(KeyId::Key(key)),
         label: "",
         width: 1.0,
     }
 }
 const fn kw(key: Key, label: &'static str, width: f32) -> Cap {
+    Cap {
+        key: Some(KeyId::Key(key)),
+        label,
+        width,
+    }
+}
+const fn md(key: KeyId, label: &'static str, width: f32) -> Cap {
     Cap {
         key: Some(key),
         label,
@@ -89,7 +96,7 @@ fn rows() -> [Vec<Cap>; 5] {
             kw(Enter, "Enter", 2.25),
         ],
         vec![
-            dead("Shift", 2.25),
+            md(KeyId::Shift, "Shift", 2.25),
             k(Z),
             k(X),
             k(C),
@@ -100,13 +107,13 @@ fn rows() -> [Vec<Cap>; 5] {
             k(Comma),
             k(Period),
             k(Slash),
-            dead("Shift", 2.75),
+            md(KeyId::Shift, "Shift", 2.75),
         ],
         vec![
-            dead("Ctrl", 1.5),
-            dead("Alt", 1.5),
+            md(KeyId::Ctrl, "Ctrl", 1.5),
+            md(KeyId::Alt, "Alt", 1.5),
             kw(Space, "Space", 6.5),
-            dead("Alt", 1.5),
+            md(KeyId::Alt, "Alt", 1.5),
             kw(ArrowLeft, "←", 1.0),
             kw(ArrowUp, "↑", 1.0),
             kw(ArrowDown, "↓", 1.0),
@@ -115,20 +122,62 @@ fn rows() -> [Vec<Cap>; 5] {
     ]
 }
 
+/// How a key cap looks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CapStyle {
+    Note {
+        black: bool,
+    },
+    Chord,
+    Borrowed,
+    /// Chord modifier; `on` while it is held.
+    Mod {
+        on: bool,
+    },
+    Drum,
+    Control,
+}
+
+/// What to write on a key cap: big centre text, small corner text.
+pub struct CapLabel {
+    pub main: String,
+    pub sub: String,
+    pub style: CapStyle,
+}
+
+impl CapLabel {
+    pub fn simple(a: Action, base_note: i32) -> CapLabel {
+        match a {
+            Action::Note(n) => CapLabel {
+                main: note_name(base_note + n),
+                sub: String::new(),
+                style: CapStyle::Note {
+                    black: is_black(base_note + n),
+                },
+            },
+            other => CapLabel {
+                main: control_icon(other).to_string(),
+                sub: String::new(),
+                style: CapStyle::Control,
+            },
+        }
+    }
+}
+
 pub struct KeyboardView<'a> {
     pub keymap: &'a Keymap,
     pub palette: &'a Palette,
-    /// MIDI note that `note 0` plays right now (octave + transpose applied).
-    pub base_note: i32,
-    pub held: &'a HashSet<Key>,
-    pub selected: Option<Key>,
-    /// Show note names on keys (Play) or raw key names only (Key test).
+    pub held: &'a HashSet<KeyId>,
+    pub selected: Option<KeyId>,
+    /// Show what keys do (Play, Keybinds) or raw key names only (Key test).
     pub show_notes: bool,
+    /// Text and colour for a bound key.
+    pub label: &'a dyn Fn(Action) -> CapLabel,
 }
 
 impl KeyboardView<'_> {
     /// Draws the keyboard; returns the key that was clicked, if any.
-    pub fn show(&self, ui: &mut Ui) -> Option<Key> {
+    pub fn show(&self, ui: &mut Ui) -> Option<KeyId> {
         let p = self.palette;
         let total_units = 15.0;
         let width = ui.available_width().min(1100.0);
@@ -142,7 +191,7 @@ impl KeyboardView<'_> {
         for (r, row) in rows().iter().enumerate() {
             let mut x = rect.left();
             let y = rect.top() + r as f32 * unit;
-            for cap in row {
+            for (c, cap) in row.iter().enumerate() {
                 let w = cap.width * unit;
                 let cap_rect = Rect::from_min_size(
                     pos2(x + gap / 2.0, y + gap / 2.0),
@@ -152,28 +201,37 @@ impl KeyboardView<'_> {
                 let action = cap.key.and_then(|k| self.keymap.get(k));
                 let held = cap.key.is_some_and(|k| self.held.contains(&k));
                 let selected = cap.key.is_some() && cap.key == self.selected;
+                let label = action.map(|a| (self.label)(a));
 
                 let (fill, text) = if held {
                     (p.primary, p.on_primary)
                 } else {
-                    match action {
+                    match &label {
                         _ if !self.show_notes => (p.surface_container_high, p.on_surface),
-                        Some(Action::Note(n)) if is_black(self.base_note + n) => {
-                            (p.secondary_container, p.on_secondary_container)
-                        }
-                        Some(Action::Note(_)) => (p.surface_container_highest, p.on_surface),
-                        Some(_) => (p.tertiary_container, p.on_surface),
+                        Some(l) => match l.style {
+                            CapStyle::Note { black: true } => {
+                                (p.secondary_container, p.on_secondary_container)
+                            }
+                            CapStyle::Note { black: false } => {
+                                (p.surface_container_highest, p.on_surface)
+                            }
+                            CapStyle::Chord => (p.primary_container, p.on_primary_container),
+                            CapStyle::Borrowed => (p.tertiary_container, p.on_surface),
+                            CapStyle::Mod { on: true } => (p.primary, p.on_primary),
+                            CapStyle::Mod { on: false } => {
+                                (p.secondary_container, p.on_secondary_container)
+                            }
+                            CapStyle::Drum => (p.primary_container, p.on_primary_container),
+                            CapStyle::Control => (p.surface_container_high, p.on_surface_variant),
+                        },
                         None if cap.key.is_none() => (p.surface_container_low, p.outline_variant),
                         None => (p.surface_container, p.outline),
                     }
                 };
                 let radius = CornerRadius::same((unit * 0.18) as u8);
                 if let Some(key) = cap.key {
-                    let resp = ui.interact(
-                        cap_rect,
-                        ui.scope_id().with(("cap", key.name())),
-                        Sense::click(),
-                    );
+                    let resp =
+                        ui.interact(cap_rect, ui.scope_id().with(("cap", r, c)), Sense::click());
                     if resp.clicked() {
                         clicked = Some(key);
                     }
@@ -187,10 +245,16 @@ impl KeyboardView<'_> {
                             fill
                         },
                     );
-                    if let Some(Action::Note(_)) = action
-                        && self.show_notes
-                        && !held
-                    {
+                    let playable = label.as_ref().is_some_and(|l| {
+                        matches!(
+                            l.style,
+                            CapStyle::Note { .. }
+                                | CapStyle::Chord
+                                | CapStyle::Borrowed
+                                | CapStyle::Drum
+                        )
+                    });
+                    if playable && self.show_notes && !held {
                         // Little accent bar at the bottom of playable keys.
                         let bar = Rect::from_min_max(
                             pos2(cap_rect.left() + unit * 0.2, cap_rect.bottom() - unit * 0.1),
@@ -221,12 +285,12 @@ impl KeyboardView<'_> {
                 let name = if !cap.label.is_empty() {
                     cap.label
                 } else {
-                    cap.key.map(key_label).unwrap_or("")
+                    cap.key.map(|k| k.label()).unwrap_or("")
                 };
                 let small = FontId::proportional((unit * 0.22).clamp(9.0, 14.0));
-                let big = FontId::proportional((unit * 0.30).clamp(10.0, 19.0));
-                match (self.show_notes, action) {
-                    (true, Some(a)) => {
+                let tiny = FontId::proportional((unit * 0.19).clamp(8.0, 12.0));
+                match (self.show_notes, label) {
+                    (true, Some(l)) => {
                         painter.text(
                             cap_rect.left_top() + vec2(unit * 0.12, unit * 0.08),
                             Align2::LEFT_TOP,
@@ -234,19 +298,29 @@ impl KeyboardView<'_> {
                             small,
                             text.gamma_multiply(0.75),
                         );
-                        let main = match a {
-                            Action::Note(n) => note_name(self.base_note + n),
-                            other => control_icon(other).to_string(),
-                        };
+                        // Shrink long names ("Bbmaj7sus4") to fit the cap.
+                        let chars = l.main.chars().count().max(1) as f32;
+                        let fit = (cap_rect.width() * 1.6 / chars).min(unit * 0.30);
+                        let big = FontId::proportional(fit.clamp(8.0, 19.0));
                         painter.text(
-                            cap_rect.center() + vec2(0.0, unit * 0.1),
+                            cap_rect.center() + vec2(0.0, unit * 0.08),
                             Align2::CENTER_CENTER,
-                            main,
+                            l.main,
                             big,
                             text,
                         );
+                        if !l.sub.is_empty() {
+                            painter.text(
+                                cap_rect.right_top() + vec2(-unit * 0.1, unit * 0.09),
+                                Align2::RIGHT_TOP,
+                                l.sub,
+                                tiny,
+                                text.gamma_multiply(0.8),
+                            );
+                        }
                     }
                     _ => {
+                        let big = FontId::proportional((unit * 0.30).clamp(10.0, 19.0));
                         painter.text(cap_rect.center(), Align2::CENTER_CENTER, name, big, text);
                     }
                 }
@@ -258,6 +332,15 @@ impl KeyboardView<'_> {
 
 pub fn control_icon(a: Action) -> &'static str {
     match a {
+        Action::Rhythm => "▶ ■",
+        Action::StyleNext => "Style+",
+        Action::StylePrev => "Style−",
+        Action::TempoUp => "Tempo+",
+        Action::TempoDown => "Tempo−",
+        Action::ScaleNext => "Scale",
+        Action::ScaleLock => "Lock",
+        Action::LayoutNext => "Layout",
+        Action::Melody(_) | Action::Chord(_) | Action::Mod(_) | Action::Drum(_) => "",
         Action::Sustain => "Pedal",
         Action::OctaveUp => "Oct+",
         Action::OctaveDown => "Oct−",
@@ -276,8 +359,18 @@ fn lighten(c: Color32, t: f32) -> Color32 {
     Color32::from_rgb(f(c.r()), f(c.g()), f(c.b()))
 }
 
-/// A piano strip from `low` covering `octaves`, lighting `sounding` notes.
-pub fn piano_strip(ui: &mut Ui, p: &Palette, low: i32, octaves: i32, sounding: &HashSet<i32>) {
+/// A piano strip from `low` covering `octaves`, lighting `sounding` notes
+/// (melody) and `chord` notes in another colour. `in_scale` puts a small dot
+/// on notes that belong to the current scale.
+pub fn piano_strip(
+    ui: &mut Ui,
+    p: &Palette,
+    low: i32,
+    octaves: i32,
+    sounding: &HashSet<i32>,
+    chord: &HashSet<i32>,
+    in_scale: Option<&dyn Fn(i32) -> bool>,
+) {
     let width = ui.available_width().min(1100.0);
     let whites: Vec<i32> = (low..low + octaves * 12 + 1)
         .filter(|n| !is_black(*n))
@@ -297,6 +390,13 @@ pub fn piano_strip(ui: &mut Ui, p: &Palette, low: i32, octaves: i32, sounding: &
         );
         x_of.insert(*n, r.left());
         let on = sounding.contains(n);
+        let fill = if on {
+            p.primary
+        } else if chord.contains(n) {
+            p.tertiary
+        } else {
+            white_fill
+        };
         painter.rect_filled(
             r,
             CornerRadius {
@@ -305,8 +405,18 @@ pub fn piano_strip(ui: &mut Ui, p: &Palette, low: i32, octaves: i32, sounding: &
                 sw: 8,
                 se: 8,
             },
-            if on { p.primary } else { white_fill },
+            fill,
         );
+        if let Some(f) = in_scale
+            && f(*n)
+            && fill == white_fill
+        {
+            painter.circle_filled(
+                pos2(r.center().x, r.bottom() - 24.0),
+                3.0,
+                p.primary.gamma_multiply(0.6),
+            );
+        }
         if n.rem_euclid(12) == 0 {
             painter.text(
                 pos2(r.center().x, r.bottom() - 10.0),
@@ -334,6 +444,13 @@ pub fn piano_strip(ui: &mut Ui, p: &Palette, low: i32, octaves: i32, sounding: &
             vec2(bw, height * 0.6),
         );
         let on = sounding.contains(&n);
+        let fill = if on {
+            p.primary
+        } else if chord.contains(&n) {
+            p.tertiary
+        } else {
+            black_fill
+        };
         painter.rect_filled(
             r,
             CornerRadius {
@@ -342,12 +459,23 @@ pub fn piano_strip(ui: &mut Ui, p: &Palette, low: i32, octaves: i32, sounding: &
                 sw: 6,
                 se: 6,
             },
-            if on { p.primary } else { black_fill },
+            fill,
         );
+        if let Some(f) = in_scale
+            && f(n)
+            && fill == black_fill
+        {
+            painter.circle_filled(
+                pos2(r.center().x, r.bottom() - 10.0),
+                2.5,
+                p.primary.gamma_multiply(0.8),
+            );
+        }
     }
     // Notes outside the strip still deserve a hint.
     let out_of_range = sounding
         .iter()
+        .chain(chord.iter())
         .filter(|n| **n < low || **n > low + octaves * 12)
         .count();
     if out_of_range > 0 {
@@ -431,4 +559,39 @@ pub fn now_playing(ui: &mut Ui, p: &Palette, sounding: &[i32]) {
         };
         ui.label(egui::RichText::new(sub).color(p.on_surface_variant));
     });
+}
+
+/// A row of dots, one per step of the bar, lighting the current one.
+pub fn beat_dots(
+    ui: &mut Ui,
+    p: &Palette,
+    steps_per_bar: u32,
+    steps_per_beat: u32,
+    current: Option<u32>,
+) {
+    let n = steps_per_bar.clamp(1, 48);
+    let spb = steps_per_beat.max(1);
+    let size = 10.0;
+    let gap = 4.0;
+    let beat_gap = 8.0;
+    let beats = n.div_ceil(spb);
+    let width = n as f32 * (size + gap) + beats as f32 * beat_gap;
+    let (rect, _) = ui.allocate_exact_size(vec2(width, size + 4.0), Sense::hover());
+    let painter = ui.painter_at(rect);
+    let mut x = rect.left();
+    for i in 0..n {
+        if i > 0 && i % spb == 0 {
+            x += beat_gap;
+        }
+        let on_beat = i % spb == 0;
+        let r = if on_beat { size / 2.0 } else { size / 3.0 };
+        let c = pos2(x + size / 2.0, rect.center().y);
+        let color = match current {
+            Some(cur) if cur == i => p.primary,
+            _ if on_beat => p.outline,
+            _ => p.outline_variant,
+        };
+        painter.circle_filled(c, r, color);
+        x += size + gap;
+    }
 }
