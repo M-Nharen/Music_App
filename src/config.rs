@@ -85,6 +85,9 @@ pub struct Config {
     pub chord_instrument: Option<usize>,
     /// Bass sound (index into `music::BASS_SOUNDS`).
     pub bass_instrument: usize,
+    /// Picture under the keyboard: "auto" (follows the instrument),
+    /// "keyboard", "guitar", "strings", "flute", "drums" or "wave".
+    pub visual: String,
 }
 
 impl Default for Config {
@@ -116,6 +119,7 @@ impl Default for Config {
             latch: true,
             chord_instrument: None,
             bass_instrument: 0,
+            visual: "auto".into(),
         }
     }
 }

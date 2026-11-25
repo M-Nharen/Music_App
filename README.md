@@ -98,6 +98,21 @@ Every key to the right is a whole step, up-left is a fourth, up-right is a fifth
 
 Bottom row kicks, snares, claps; home row hi-hats, ride, congas; Q-row toms and crashes; Space is a kick. `Enter` plays the current pattern's beat so you can drum along.
 
+### The picture under the keyboard
+
+It follows your instrument and lights up whatever is playing (melody in one colour, chord in another):
+
+| Instrument | Picture |
+|---|---|
+| Pianos, organ, electric piano, mallets, harp | Keyboard |
+| Guitars | Guitar fretboard (standard tuning), with a playable hand position for each chord |
+| Strings | Violin or cello fingerboard (cello when the music is low), with beginner finger-tape lines |
+| Flute | 6-hole fingering diagram (● covered, ◐ half, ○ open) for the note you're playing |
+| Drums layout | Drum pads that flash when hit |
+| Pads, synths, choir | A glowing waveform of the notes |
+
+The **View** menu above it lets you pick any picture instead. Dots on the fretboards mark the notes of the current scale.
+
 ### Key and scale
 
 The **Key** and **Scale** pickers on the Play tab apply to every layout. Keys get a • if their note is in the scale and a ★ on the key's home note. **Scale lock** makes piano/isomorphic keys play the nearest scale note instead, so nothing sounds wrong.
@@ -164,6 +179,7 @@ Bluetooth adds roughly 150–250 ms of delay. That comes from the earbuds and th
 
 1. **Audio & latency → Output.** If a lower-delay codec is available, click **Switch to a2dp-sink-sbc**. SBC has less delay than AAC or LDAC (LDAC on the XM4 has the most).
 2. **Run the latency test** with each pair and press **Save**. Later parts use this number to line up songs and falling notes with what you actually hear.
+   Every saved pair appears under **Saved devices** (name, Bluetooth or wired, delay, instrument, and whether it's connected now), where you can rename, re-test or remove it.
 3. **Choose an instrument per device.** Sounds marked ✦ (pads, strings, organ, choir) have soft attacks that hide the delay. Qwertone switches to it automatically when those earbuds connect.
 4. Wired earphones (any cheap pair) bring the delay down to about 5 ms with no setup.
 
@@ -190,7 +206,8 @@ src/
   latency.rs    tap-along latency measurement
   theme.rs      end4 / Material You colours and fonts
   music.rs      note names, chord naming, instruments
-  ui/           egui app (app.rs, app/play.rs, app/keybinds.rs) and custom widgets
+  ui/           egui app (app.rs, app/play.rs, app/keybinds.rs), custom widgets,
+                visuals.rs (keyboard / fretboard / fingerboard / flute / pads / waveform)
 ```
 
 Run the tests with `cargo test`.

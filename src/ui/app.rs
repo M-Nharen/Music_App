@@ -16,7 +16,7 @@ use crate::theme::{self, Palette};
 use crate::theory::{Chord, ChordMod, ChordRef, build_chord, voice_chord};
 use crate::ui::widgets::{CapLabel, CapStyle, KeyboardView, card, chip};
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use egui::{Event, Key, RichText};
+use egui::{Color32, Event, Key, RichText};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -92,12 +92,21 @@ pub struct QwertoneApp {
     retired_patterns: Vec<Arc<Pattern>>,
     pattern_warnings: Vec<String>,
     last_drum: Option<(u8, Instant)>,
+    /// When each drum was last hit, for the drum-pad picture.
+    drum_hits: HashMap<u8, Instant>,
 
     // Keybind editor.
     selected_key: Option<KeyId>,
     /// Waiting for a key press to bind: (key it's moving from, action).
     capture_for: Option<(Option<KeyId>, Action)>,
     new_layout_name: String,
+
+    // Saved devices list: (sink being renamed, new name), and the sink
+    // waiting for a second "remove" click.
+    renaming: Option<(String, String)>,
+    confirm_remove: Option<String>,
+    /// Focus the rename box on the next frame.
+    rename_focus: bool,
 
     // Latency test.
     tap: TapTest,
@@ -165,9 +174,13 @@ impl QwertoneApp {
             retired_patterns: Vec::new(),
             pattern_warnings,
             last_drum: None,
+            drum_hits: HashMap::new(),
             selected_key: None,
             capture_for: None,
             new_layout_name: String::new(),
+            renaming: None,
+            confirm_remove: None,
+            rename_focus: false,
             tap: TapTest::default(),
             tap_result: None,
             max_held: 0,
@@ -675,6 +688,7 @@ impl QwertoneApp {
                     velocity: self.velocity() as u8,
                 });
                 self.last_drum = Some((d, Instant::now()));
+                self.drum_hits.insert(d, Instant::now());
             }
             Action::Sustain => {
                 self.sustain_on = true;
@@ -980,11 +994,7 @@ impl QwertoneApp {
         // The chord-change grace window follows the device's delay.
         self.current_device = Some(d.clone());
         self.send_style();
-        let name = if d.description.is_empty() {
-            d.sink.clone()
-        } else {
-            d.description.clone()
-        };
+        let name = self.device_name(&d);
         match self.cfg.devices.get(&d.sink).cloned() {
             Some(profile) => {
                 if d.bluetooth
@@ -1005,6 +1015,25 @@ impl QwertoneApp {
             }
             None => self.notify(format!("Output: {name}")),
         }
+    }
+
+    /// Your name for a device if you renamed it, else what PipeWire calls it.
+    fn device_name(&self, d: &OutputInfo) -> String {
+        match self.cfg.devices.get(&d.sink) {
+            Some(prof) if !prof.label.is_empty() => prof.label.clone(),
+            _ if !d.description.is_empty() => d.description.clone(),
+            _ => d.sink.clone(),
+        }
+    }
+
+    fn start_tap_test(&mut self) {
+        self.all_notes_off();
+        self.tap.start();
+        self.tap_result = None;
+        self.send(Command::Metronome {
+            bpm: TEST_BPM,
+            on: true,
+        });
     }
 
     fn finish_tap_test(&mut self) {
@@ -1066,11 +1095,7 @@ impl QwertoneApp {
                     } else {
                         String::new()
                     };
-                    text += if d.description.is_empty() {
-                        &d.sink
-                    } else {
-                        &d.description
-                    };
+                    text += &self.device_name(d);
                     if let Some(c) = &d.codec {
                         text += &format!(" · {}", c.to_uppercase());
                     }
@@ -1101,7 +1126,7 @@ impl QwertoneApp {
                         ui.label("Couldn't ask PipeWire about the output (is `pactl` installed? It comes with `libpulse`).");
                     }
                     Some(d) => {
-                        ui.label(RichText::new(if d.description.is_empty() { &d.sink } else { &d.description }).size(18.0).strong());
+                        ui.label(RichText::new(self.device_name(&d)).size(18.0).strong());
                         ui.label(RichText::new(&d.sink).small().color(p.on_surface_variant));
                         ui.horizontal(|ui| {
                             chip(ui, p.surface_container_high, p.on_surface, if d.bluetooth { "Bluetooth" } else { "Wired / built-in" });
@@ -1201,10 +1226,7 @@ impl QwertoneApp {
                             self.finish_tap_test();
                         }
                     } else if ui.button("▶  Start test").clicked() {
-                        self.all_notes_off();
-                        self.tap.start();
-                        self.tap_result = None;
-                        self.send(Command::Metronome { bpm: TEST_BPM, on: true });
+                        self.start_tap_test();
                     }
                     if let Some(r) = self.tap_result {
                         ui.add_space(4.0);
@@ -1212,10 +1234,12 @@ impl QwertoneApp {
                         let quality = if r.spread_ms < 25.0 { "steady taps, good result" } else if r.spread_ms < 50.0 { "okay, maybe run it again" } else { "taps were uneven, try again" };
                         ui.label(format!("±{:.0} ms · {} taps · {quality}", r.spread_ms, r.taps_used));
                         if let Some(d) = self.current_device.clone()
-                            && ui.button(format!("Save for {}", if d.description.is_empty() { &d.sink } else { &d.description })).clicked() {
+                            && ui.button(format!("Save for {}", self.device_name(&d))).clicked() {
                                 let entry = self.cfg.devices.entry(d.sink.clone()).or_default();
                                 entry.latency_ms = r.latency_ms;
-                                entry.label = d.description.clone();
+                                if entry.label.is_empty() {
+                                    entry.label = d.description.clone();
+                                }
                                 entry.bluetooth = d.bluetooth;
                                 self.mark_dirty();
                                 self.send_style();
@@ -1294,7 +1318,196 @@ impl QwertoneApp {
                     );
                 });
             });
+            ui.add_space(8.0);
+            card(ui, &p, "Saved devices", |ui| self.saved_devices(ui));
         });
+    }
+
+    /// Every device in config.toml [devices], with rename / re-test / remove.
+    fn saved_devices(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette;
+        let connected = self.current_device.as_ref().map(|d| d.sink.clone());
+        if self.cfg.devices.is_empty() {
+            ui.label(
+                RichText::new(
+                    "No devices saved yet. Run the latency test above with your headphones on and \
+                     press Save; each pair you save shows up here.",
+                )
+                .color(p.on_surface_variant),
+            );
+        }
+        if let Some(sink) = &connected
+            && !self.cfg.devices.contains_key(sink)
+            && !self.cfg.devices.is_empty()
+        {
+            ui.label(
+                RichText::new(
+                    "The device you're using now isn't saved yet: run the test and press Save.",
+                )
+                .color(p.tertiary),
+            );
+        }
+        let mut remove = None;
+        let mut retest = false;
+        let mut rename_done: Option<(String, String)> = None;
+        let want_focus = std::mem::take(&mut self.rename_focus);
+        let mut start_rename = None;
+        let devices: Vec<(String, DeviceProfile)> = self
+            .cfg
+            .devices
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        egui::Grid::new("saved-devices")
+            .striped(true)
+            .num_columns(5)
+            .spacing([18.0, 8.0])
+            .show(ui, |ui| {
+                for h in ["Device", "Type", "Delay", "Instrument", ""] {
+                    ui.label(RichText::new(h).small().color(p.on_surface_variant));
+                }
+                ui.end_row();
+                for (sink, prof) in devices {
+                    let is_now = connected.as_deref() == Some(sink.as_str());
+                    // Name (or rename box).
+                    ui.vertical(|ui| {
+                        match &mut self.renaming {
+                            Some((s, text)) if *s == sink => {
+                                ui.horizontal(|ui| {
+                                    let r = ui
+                                        .add(egui::TextEdit::singleline(text).desired_width(180.0));
+                                    if want_focus {
+                                        r.request_focus();
+                                    }
+                                    let enter =
+                                        r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+                                    if ui.small_button("Save").clicked() || enter {
+                                        rename_done = Some((sink.clone(), text.trim().to_string()));
+                                    }
+                                    if ui.small_button("Cancel").clicked() {
+                                        rename_done = Some((sink.clone(), prof.label.clone()));
+                                    }
+                                });
+                            }
+                            _ => {
+                                ui.horizontal(|ui| {
+                                    let name = if prof.label.is_empty() {
+                                        &sink
+                                    } else {
+                                        &prof.label
+                                    };
+                                    ui.label(RichText::new(name).strong());
+                                    if is_now {
+                                        chip(
+                                            ui,
+                                            p.primary_container,
+                                            p.on_primary_container,
+                                            "● connected",
+                                        );
+                                    }
+                                });
+                            }
+                        }
+                        ui.add(
+                            egui::Label::new(RichText::new(&sink).small().color(p.outline))
+                                .wrap_mode(egui::TextWrapMode::Extend),
+                        );
+                    });
+                    ui.label(if prof.bluetooth {
+                        "Bluetooth"
+                    } else {
+                        "Wired / built-in"
+                    });
+                    ui.label(if prof.latency_ms > 0.0 {
+                        format!("{:.0} ms", prof.latency_ms)
+                    } else {
+                        "not measured".into()
+                    });
+                    ui.label(
+                        prof.instrument
+                            .map(|i| INSTRUMENTS[i.min(INSTRUMENTS.len() - 1)].name)
+                            .unwrap_or("keep current"),
+                    );
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Rename").clicked() {
+                            let current = if prof.label.is_empty() {
+                                sink.clone()
+                            } else {
+                                prof.label.clone()
+                            };
+                            start_rename = Some((sink.clone(), current));
+                        }
+                        let retest_btn = ui.add_enabled(
+                            is_now && !self.tap.running,
+                            egui::Button::new("Re-test").small(),
+                        );
+                        if retest_btn
+                            .on_disabled_hover_text(
+                                "Connect this device first (or wait for the running test)",
+                            )
+                            .on_hover_text("Runs the tap-along latency test above again")
+                            .clicked()
+                        {
+                            retest = true;
+                        }
+                        let confirming = self.confirm_remove.as_deref() == Some(sink.as_str());
+                        let label = if confirming {
+                            "Really remove?"
+                        } else {
+                            "Remove"
+                        };
+                        let btn = egui::Button::new(RichText::new(label).color(if confirming {
+                            p.surface
+                        } else {
+                            p.error
+                        }))
+                        .small()
+                        .fill(if confirming {
+                            p.error
+                        } else {
+                            Color32::TRANSPARENT
+                        });
+                        if ui.add(btn).clicked() {
+                            if confirming {
+                                remove = Some(sink.clone());
+                            } else {
+                                self.confirm_remove = Some(sink.clone());
+                            }
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
+        if let Some(r) = start_rename {
+            self.renaming = Some(r);
+            self.rename_focus = true;
+        }
+        if let Some((sink, name)) = rename_done {
+            if let Some(prof) = self.cfg.devices.get_mut(&sink) {
+                prof.label = name;
+                self.mark_dirty();
+            }
+            self.renaming = None;
+        }
+        if let Some(sink) = remove {
+            if let Some(prof) = self.cfg.devices.remove(&sink) {
+                let name = if prof.label.is_empty() {
+                    sink
+                } else {
+                    prof.label
+                };
+                self.notify(format!(
+                    "Removed {name}. It'll use defaults until you test it again."
+                ));
+                self.mark_dirty();
+                self.send_style();
+            }
+            self.confirm_remove = None;
+        }
+        if retest {
+            self.start_tap_test();
+            self.notify("Latency test started: tap Space each time you hear a click");
+        }
     }
 
     fn keytest_tab(&mut self, ui: &mut egui::Ui) {

@@ -4,7 +4,8 @@ use super::*;
 use crate::audio::sequencer::ArpMode;
 use crate::keymap::ActionKind;
 use crate::theory::{Scale, pc_name};
-use crate::ui::widgets::{beat_dots, now_playing, piano_strip};
+use crate::ui::visuals::{self, Visual, VisualInput};
+use crate::ui::widgets::{beat_dots, now_playing};
 
 impl QwertoneApp {
     pub(super) fn play_tab(&mut self, ui: &mut egui::Ui) {
@@ -45,35 +46,92 @@ impl QwertoneApp {
                 drop(label);
                 ui.add_space(8.0);
 
-                if has_notes {
-                    let melody: HashSet<i32> = self.sounding.values().copied().collect();
-                    let mut chord: HashSet<i32> = HashSet::new();
-                    if self.chord.is_some() {
-                        chord.extend(self.voicing.iter().copied());
-                        chord.extend(self.bass_note);
-                    }
-                    let (low, octaves) = if has_chords {
-                        (BASE_NOTE - 12 + self.cfg.octave * 12, 4)
-                    } else {
-                        (BASE_NOTE + self.cfg.octave * 12, 3)
-                    };
-                    let (tonic, scale) = (self.tonic_pc(), self.cfg.scale);
-                    let in_scale = move |n: i32| scale.contains(tonic, n);
-                    piano_strip(
-                        ui,
-                        &p,
-                        low,
-                        octaves,
-                        &melody,
-                        &chord,
-                        self.cfg
-                            .show_scale
-                            .then_some(&in_scale as &dyn Fn(i32) -> bool),
-                    );
-                    ui.add_space(6.0);
-                }
+                self.instrument_visual(ui, has_chords, has_drums && !has_notes);
+                ui.add_space(6.0);
                 self.help_text(ui, has_chords);
             });
+    }
+
+    /// The picture that follows the instrument (or the one picked).
+    fn visual(&self, drums_layout: bool) -> Visual {
+        match Visual::from_code(&self.cfg.visual) {
+            Some(v) => v,
+            None if drums_layout => Visual::Drums,
+            None => Visual::for_program(self.instrument().program),
+        }
+    }
+
+    fn instrument_visual(&mut self, ui: &mut egui::Ui, has_chords: bool, drums_layout: bool) {
+        let p = self.palette;
+        let auto = Visual::from_code(&self.cfg.visual).is_none();
+        let current = self.visual(drums_layout);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("View").color(p.on_surface_variant));
+            let mut sel = if auto { None } else { Some(current) };
+            let auto_name = if drums_layout {
+                Visual::Drums
+            } else {
+                Visual::for_program(self.instrument().program)
+            };
+            egui::ComboBox::from_id_salt("visual")
+                .width(220.0)
+                .selected_text(match sel {
+                    None => format!("Match instrument ({})", auto_name.name()),
+                    Some(v) => v.name().to_string(),
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut sel, None, "Match instrument");
+                    for v in Visual::ALL {
+                        ui.selectable_value(&mut sel, Some(v), v.name());
+                    }
+                });
+            let code = sel.map(|v| v.code()).unwrap_or("auto");
+            if code != self.cfg.visual {
+                self.cfg.visual = code.to_string();
+                self.mark_dirty();
+            }
+        });
+        let melody: HashSet<i32> = self.sounding.values().copied().collect();
+        let mut chord: HashSet<i32> = HashSet::new();
+        if self.chord.is_some() {
+            chord.extend(self.voicing.iter().copied());
+            chord.extend(self.bass_note);
+        }
+        let (low, octaves) = if has_chords {
+            (BASE_NOTE - 12 + self.cfg.octave * 12, 4)
+        } else {
+            (BASE_NOTE + self.cfg.octave * 12, 3)
+        };
+        let (tonic, scale) = (self.tonic_pc(), self.cfg.scale);
+        let in_scale = move |n: i32| scale.contains(tonic, n);
+        // Drum pads: the drums this layout has, in kit order.
+        let pads: Vec<u8> = crate::drums::DRUMS
+            .iter()
+            .map(|d| d.note)
+            .filter(|n| {
+                self.keymap
+                    .bindings
+                    .values()
+                    .any(|a| *a == Action::Drum(*n))
+            })
+            .collect();
+        visuals::show(
+            ui,
+            &p,
+            current,
+            &VisualInput {
+                melody: &melody,
+                chord: &chord,
+                low,
+                octaves,
+                in_scale: self
+                    .cfg
+                    .show_scale
+                    .then_some(&in_scale as &dyn Fn(i32) -> bool),
+                drum_pads: &pads,
+                drum_hits: &self.drum_hits,
+            },
+        );
     }
 
     fn layout_bar(&mut self, ui: &mut egui::Ui) {
