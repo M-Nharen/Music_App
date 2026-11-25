@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect x="8" y="8" width="112" height="112" rx="32" fill="#211F26"/>
+  <!-- three key caps -->
+  <rect x="22" y="62" width="24" height="34" rx="7" fill="#E6E0E9"/>
+  <rect x="52" y="62" width="24" height="34" rx="7" fill="#CFBCFF"/>
+  <rect x="82" y="62" width="24" height="34" rx="7" fill="#E6E0E9"/>
+  <!-- note -->
+  <path d="M70 22v26.5a9 9 0 1 1-5-8V28l22-5v8z" fill="#CFBCFF"/>
+</svg>

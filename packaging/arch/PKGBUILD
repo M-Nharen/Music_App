@@ -1,0 +1,52 @@
+# Build and install Qwertone like a normal Arch package:
+#   makepkg -si
+pkgname=qwertone-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Play music on your laptop keyboard: low-latency synth, chords and song learning"
+arch=('x86_64' 'aarch64')
+url="https://github.com/M-Nharen/Music_App"
+license=('MIT')
+depends=('pipewire' 'alsa-lib' 'libpulse' 'gcc-libs' 'libxkbcommon' 'vulkan-icd-loader')
+makedepends=('cargo' 'clang' 'git' 'pkgconf')
+optdepends=(
+    'soundfont-fluid: realistic piano, strings and other instruments'
+    'pipewire-pulse: lets Qwertone see which headphones are connected'
+    'realtime-privileges: real-time audio priority for fewer glitches'
+)
+provides=('qwertone')
+conflicts=('qwertone')
+source=("qwertone::git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd qwertone
+    printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd qwertone
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd qwertone
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --frozen --release
+}
+
+check() {
+    cd qwertone
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --frozen --release
+}
+
+package() {
+    cd qwertone
+    install -Dm755 target/release/qwertone "$pkgdir/usr/bin/qwertone"
+    install -Dm644 assets/qwertone.desktop "$pkgdir/usr/share/applications/qwertone.desktop"
+    install -Dm644 assets/qwertone.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/qwertone.svg"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

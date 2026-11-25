@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Qwertone
+GenericName=Keyboard Instrument
+Comment=Play music on your laptop keyboard
+Exec=qwertone
+Icon=qwertone
+Terminal=false
+Categories=AudioVideo;Audio;Music;Education;
+Keywords=piano;music;synth;chords;keyboard;
+StartupWMClass=qwertone
