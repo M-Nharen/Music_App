@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/M-Nharen/Music_App/analyzer/schema/song.schema.json",
+  "title": "Qwertone song (format version 1)",
+  "description": "song.json written by qwertone-analyze. See SONG_FORMAT.md.",
+  "type": "object",
+  "required": ["format", "format_version", "analyzer", "source", "metadata", "duration",
+               "low_confidence_threshold", "stems", "midi", "tempo", "beats", "key", "chords",
+               "sections", "parts", "simplified"],
+  "properties": {
+    "format": {"const": "qwertone-song"},
+    "format_version": {"const": 1},
+    "analyzer": {
+      "type": "object",
+      "required": ["version", "created", "mode", "options", "fingerprint", "models"],
+      "properties": {
+        "version": {"type": "string"},
+        "created": {"type": "string"},
+        "mode": {"enum": ["chords", "melody", "chords+melody", "full", "instrument", "simplified"]},
+        "instrument": {"enum": [null, "bass", "piano", "drums"]},
+        "options": {"type": "object"},
+        "fingerprint": {"type": "string"},
+        "models": {"type": "object"},
+        "device": {"type": "string"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["kind", "file", "path", "sha256", "duration"],
+      "properties": {
+        "kind": {"enum": ["audio", "midi"]},
+        "file": {"type": "string"},
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "duration": {"type": "number", "minimum": 0},
+        "sample_rate": {"type": ["integer", "null"]}
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": {"type": "string"},
+        "artist": {"type": ["string", "null"]},
+        "album": {"type": ["string", "null"]}
+      }
+    },
+    "duration": {"type": "number", "minimum": 0},
+    "low_confidence_threshold": {"$ref": "#/$defs/unit"},
+    "stems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "file"],
+        "properties": {"name": {"type": "string"}, "file": {"type": "string"}}
+      }
+    },
+    "midi": {"type": "string"},
+    "tempo": {
+      "type": "object",
+      "required": ["bpm", "beats_per_bar", "time_signature", "confidence", "downbeat_confidence"],
+      "properties": {
+        "bpm": {"type": "number", "exclusiveMinimum": 0},
+        "beats_per_bar": {"type": "integer", "minimum": 1},
+        "time_signature": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2},
+        "confidence": {"$ref": "#/$defs/unit"},
+        "downbeat_confidence": {"$ref": "#/$defs/unit"}
+      }
+    },
+    "beats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["time", "bar", "beat", "downbeat"],
+        "properties": {
+          "time": {"type": "number"},
+          "bar": {"type": "integer", "minimum": 0},
+          "beat": {"type": "integer", "minimum": 1},
+          "downbeat": {"type": "boolean"}
+        }
+      }
+    },
+    "key": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/key"}]},
+    "chords": {"type": "array", "items": {"$ref": "#/$defs/chord"}},
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "start_bar", "end_bar", "label", "name", "confidence"],
+        "properties": {
+          "start": {"type": "number"},
+          "end": {"type": "number"},
+          "start_bar": {"type": "integer"},
+          "end_bar": {"type": "integer"},
+          "label": {"type": "string", "pattern": "^[A-Z]$"},
+          "name": {"enum": ["intro", "verse", "chorus", "bridge", "outro", "section"]},
+          "confidence": {"$ref": "#/$defs/unit"}
+        }
+      }
+    },
+    "parts": {"type": "array", "items": {"$ref": "#/$defs/part"}},
+    "simplified": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["difficulty", "transpose", "max_keys", "grid_beats", "melody_range",
+                       "accompaniment", "accompaniment_range", "key", "chords", "parts"],
+          "properties": {
+            "difficulty": {"type": "integer", "minimum": 1, "maximum": 5},
+            "transpose": {"type": "integer", "minimum": -11, "maximum": 11},
+            "max_keys": {"type": "integer", "minimum": 1, "maximum": 3},
+            "grid_beats": {"type": "number", "exclusiveMinimum": 0},
+            "melody_range": {"$ref": "#/$defs/noteRange"},
+            "accompaniment": {"enum": ["none", "root_on_change", "root_each_bar", "root_fifth", "root_third"]},
+            "accompaniment_range": {"$ref": "#/$defs/noteRange"},
+            "key": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/key"}]},
+            "chords": {"type": "array", "items": {"$ref": "#/$defs/chord"}},
+            "parts": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "unit": {"type": "number", "minimum": 0, "maximum": 1},
+    "pcName": {"enum": ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]},
+    "noteRange": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+    "key": {
+      "type": "object",
+      "required": ["tonic", "tonic_pc", "mode", "name", "confidence", "alternatives"],
+      "properties": {
+        "tonic": {"$ref": "#/$defs/pcName"},
+        "tonic_pc": {"type": "integer", "minimum": 0, "maximum": 11},
+        "mode": {"enum": ["major", "minor"]},
+        "name": {"type": "string"},
+        "confidence": {"$ref": "#/$defs/unit"},
+        "alternatives": {
+          "type": "array",
+          "items": {"type": "object", "required": ["name", "score"],
+                    "properties": {"name": {"type": "string"}, "score": {"type": "number"}}}
+        }
+      }
+    },
+    "chord": {
+      "type": "object",
+      "required": ["start", "end", "start_beat", "end_beat", "symbol", "root", "quality", "bass",
+                   "pitch_classes", "roman", "diatonic", "confidence", "low_confidence"],
+      "properties": {
+        "start": {"type": "number"},
+        "end": {"type": "number"},
+        "start_beat": {"type": "number"},
+        "end_beat": {"type": "number"},
+        "symbol": {"type": "string"},
+        "root": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/pcName"}]},
+        "quality": {"enum": [null, "maj", "min", "7", "maj7", "m7", "dim", "aug", "sus2", "sus4"]},
+        "bass": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/pcName"}]},
+        "pitch_classes": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 11}},
+        "roman": {"type": ["string", "null"]},
+        "diatonic": {"type": ["boolean", "null"]},
+        "confidence": {"$ref": "#/$defs/unit"},
+        "low_confidence": {"type": "boolean"}
+      }
+    },
+    "note": {
+      "type": "object",
+      "required": ["pitch", "name", "start", "end", "start_beat", "end_beat", "velocity",
+                   "confidence", "low_confidence"],
+      "properties": {
+        "pitch": {"type": "integer", "minimum": 0, "maximum": 127},
+        "name": {"type": "string"},
+        "start": {"type": "number"},
+        "end": {"type": "number"},
+        "start_beat": {"type": "number"},
+        "end_beat": {"type": "number"},
+        "velocity": {"type": "integer", "minimum": 1, "maximum": 127},
+        "confidence": {"$ref": "#/$defs/unit"},
+        "low_confidence": {"type": "boolean"}
+      }
+    },
+    "part": {
+      "type": "object",
+      "required": ["id", "name", "role", "method", "stem", "is_drum", "program", "midi_track",
+                   "midi_channel", "midi_file", "transpose", "simplified", "note_count",
+                   "low_confidence_count", "pitch_range", "notes"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "name": {"type": "string"},
+        "role": {"enum": ["melody", "chords", "bass", "piano", "drums", "vocals", "other", "guitar", "arrangement"]},
+        "method": {"type": "string"},
+        "stem": {"type": ["string", "null"]},
+        "is_drum": {"type": "boolean"},
+        "program": {"type": "integer", "minimum": 0, "maximum": 127},
+        "midi_track": {"type": "integer", "minimum": 1},
+        "midi_channel": {"type": "integer", "minimum": 0, "maximum": 15},
+        "midi_file": {"type": "string"},
+        "transpose": {"type": "integer"},
+        "simplified": {"type": ["object", "null"]},
+        "note_count": {"type": "integer", "minimum": 0},
+        "low_confidence_count": {"type": "integer", "minimum": 0},
+        "pitch_range": {"type": "array", "items": {"type": ["integer", "null"]}, "minItems": 2, "maxItems": 2},
+        "notes": {"type": "array", "items": {"$ref": "#/$defs/note"}}
+      }
+    }
+  }
+}
