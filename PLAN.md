@@ -33,6 +33,31 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 7 | Jam mode: stem mixer with your part muted, time-stretch, Bluetooth delay compensation of backing + visuals | |
 | 8 | Spotify: PKCE login, search, remote control, now-playing → open practice version, sync mode | |
 | 9 | Polish: themes, stats, streaks, more lessons | |
+| 10a-lite | Lyrics engine, small (analyzer/ only): `.lrc` + embedded tags + LRCLIB synced lyrics, Tanglish transliteration, `lyrics.json` with source info for words / timing / translation | |
+| 10b | Lyrics in the app: Spotify-style Lyrics screen, current line inside the falling-notes area (toggle, top/bottom), source badge, lyrics editor, tap-along timing, Bluetooth offset + manual nudge | |
+| 10a-full | Lyrics engine, rest: Whisper (faster-whisper) transcription of the vocal stem with language auto-detect, force-aligning plain lyrics, offline English translation, AcoustID lookup | |
+
+## Build order
+
+Each part starts from the newest branch (it contains everything before it). Don't run two parts at once if both edit `src/`; an `analyzer/`-only part can run alongside an app part.
+
+| Order | Part | Start from | Push to | Can run alongside |
+|---|---|---|---|---|
+| 1 | 4b looper + MIDI out | `part-4a-record` | `part-4b-loop` | 10a-lite |
+| 1 | 10a-lite lyrics engine | `part-4a-record` | `part-10a-lyrics` | 4b (only edits `analyzer/`) |
+| 2 | 7 Jam mode | `part-4b-loop` (merge `part-10a-lyrics` first) | `part-7-jam` | — |
+| 3 | 10b lyrics in the app | `part-7-jam` | `part-10b-lyrics` | 10a-full |
+| 3 | 10a-full lyrics engine | `part-10a-lyrics` | `part-10a-full` | 10b (only edits `analyzer/`) |
+| 4 | 8 Spotify (also: sync lyrics with Spotify playback) | latest | `part-8-spotify` | — |
+| 5 | 9 Polish, then merge everything into `main` | latest | `main` | — |
+
+### Lyrics notes (Part 10)
+
+- Spotify's lyrics can't be used (no public API; licensed to Spotify). Lyrics come from local files, LRCLIB, or are generated. Spotify (Part 8) only supplies title/artist/duration/position for lookup and sync.
+- The user mostly listens to Tamil songs. Show three toggles per line: Tamil script, Tanglish (romanised), English (machine translation, labelled as such).
+- egui 0.37 shapes text with harfrust, so Tamil renders correctly when a Tamil font is loaded (`noto-fonts` has Noto Sans Tamil); add it as a fallback font.
+- Source info is kept separately for words / timing / translation, per song and per line where it differs (e.g. user edits), with the URL or file and fetch date, so the app can show a "where these lyrics came from" badge.
+- Lyric timing uses seconds and beats (like notes) and the same Bluetooth latency offset as Song mode.
 
 ## Notes for the next session
 
