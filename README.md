@@ -2,7 +2,7 @@
 
 Play music on your laptop keyboard. Built for Arch + Hyprland (end4 rice), works over Bluetooth earbuds, and lets you remap every key.
 
-> **Status: Parts 1–7 of 9, plus the lyrics engine (10a).** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), metronome, recording and a looper, MIDI out, Song mode (falling notes, chord sheet, wait mode, loops, scoring, one-key mode, auto song layout), Jam mode (play along with the real recording's separated parts), a note editor, live listen mode, the song analyzer with lyrics (`analyzer/`), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
+> **Status: Parts 1–8 of 9, plus lyrics (10a, 10b).** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), metronome, recording and a looper, MIDI out, Song mode (falling notes, chord sheet, wait mode, loops, scoring, one-key mode, auto song layout), Jam mode (play along with the real recording's separated parts), a note editor, live listen mode, lyrics, Spotify (now playing, search, sync mode), the song analyzer with lyrics (`analyzer/`), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
 
 ## Install (Arch)
 
@@ -195,6 +195,18 @@ The **Song** tab teaches you real songs on your own keys.
 
 **Edit notes.** *Edit notes* opens the part with the most unsure notes in a piano roll. **Tab** jumps to the next unsure note (it plays so you can check it by ear), ↑↓ change its pitch, drag to move, drag the right edge to resize, double-click to add, Delete removes, **Enter** marks it "looks right", Ctrl+Z undoes. **Save** (Ctrl+S) writes `song.json` (every note you touched gets confidence 1.0; a `song.json.bak` is kept) and refreshes the song's MIDI files. For a plain MIDI file it saves `<name>-edited.mid` next to it.
 
+**Lyrics.** *♪ Lyrics* shows the words big, following the song, and the current line also shows inside the falling notes. Lines are shown in English letters (Tanglish / Tenglish / Hinglish …) by default; the original script and the English machine translation can be switched on next to them.
+
+## Spotify
+
+The **Spotify** tab connects to your Spotify (Premium) account through your own personal developer app: set it up once with [docs/SPOTIFY_SETUP.md](docs/SPOTIFY_SETUP.md) (create the app, add the redirect URI `http://127.0.0.1:8898/callback`, paste the Client ID, log in).
+
+- **Now playing** with play / pause / seek, and **search** (results are remembered).
+- **Learn this** opens the practice version of the song. If you haven't analysed it yet, Qwertone finds your copy in `~/Music` / `~/Downloads` (or you pick it) and analyses it; Spotify's own audio is never used.
+- **Sync mode**: Learn this on the song that's playing makes the Song tab follow Spotify: falling notes, chord sheet, lyrics and scoring move with Spotify's position, and play / pause / seek control Spotify. *Notes − later / + earlier* lines your file up with Spotify's version (saved per song).
+- **Lyrics** for whatever plays, synced: from your analysed song, else LRCLIB by Spotify's title / artist / length.
+- Spotify's limits for personal apps are small, so Qwertone only checks what's playing while the Spotify tab or sync mode is on screen (every 12 s, plus right after you press play / pause / seek) and estimates the position in between. If Spotify says "too many requests", everything waits as long as it asks, the header shows *Spotify paused for N min*, and the app carries on with what it knows.
+
 ## Listen
 
 The **Listen** tab hears any audio input and shows the chord, the notes, the melody note (with a little tuner), the key so far and the chords heard, and lights the keys of your layout that play along. Pick the input that says *what the computer plays* to follow Spotify or a video without a microphone. Don't pick the earbuds' own microphone: Bluetooth switches to call quality while it's in use.
@@ -303,8 +315,12 @@ src/
   record.rs     recording takes to MIDI files, tap tempo
   midiout.rs    virtual MIDI out (ALSA sequencer port + timing thread)
   listen/       live listen: audio input + chord / note / pitch detection
+  spotify/      Spotify (no UI): PKCE login, token store (keyring / private
+                file), rate limiter, polling + position estimate, API worker,
+                caches, matching tracks to songs, lyrics lookup
   ui/           egui app (app.rs, app/play.rs, app/learn.rs, app/song.rs,
-                app/listen.rs, app/keybinds.rs, app/record.rs, app/looper.rs),
+                app/listen.rs, app/keybinds.rs, app/record.rs, app/looper.rs,
+                app/spotify_tab.rs),
                 custom widgets, circle.rs,
                 song_view.rs (falling notes, chord sheet, timeline, piano roll),
                 visuals.rs (keyboard / fretboard / fingerboard / flute / pads / waveform)
