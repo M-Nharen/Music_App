@@ -2,7 +2,7 @@
 
 Play music on your laptop keyboard. Built for Arch + Hyprland (end4 rice), works over Bluetooth earbuds, and lets you remap every key.
 
-> **Status: Part 2 of 9.** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
+> **Status: Part 3 of 9.** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
 
 ## Install (Arch)
 
@@ -117,6 +117,28 @@ The **View** menu above it lets you pick any picture instead. Dots on the fretbo
 
 The **Key** and **Scale** pickers on the Play tab apply to every layout. Keys get a • if their note is in the scale and a ★ on the key's home note. **Scale lock** makes piano/isomorphic keys play the nearest scale note instead, so nothing sounds wrong.
 
+## Learn
+
+The **Learn** tab teaches music from zero, on your own keyboard and keybinds.
+
+**What you're hearing.** Whatever you play gets explained: the chord's name, its roman numeral in the key (V7 in C major), its job (home, away, tension), why it sounds happy, sad or tense, a Rest ↔ Tension meter, and how the move from the last chord sounds ("V → I: tension → release"). Two notes are named as an interval with songs that start with it. The same panel shows on the Play tab (untick **Explain** to hide it).
+
+**Lessons.** 23 short, hands-on lessons in 7 chapters:
+
+1. Notes & octaves
+2. Intervals (each with famous songs that start with it)
+3. Major, minor and pentatonic scales
+4. Building chords: triads, major vs minor, dim/aug/sus, the 7 chords of a key, 7ths
+5. Progressions: home/away/tension, cadences, I–V–vi–IV, ii–V–I, borrowed chords
+6. The circle of fifths (drawn next to the lesson and following your chords)
+7. Modes
+
+Lessons light up the keys to press in your current layout, numbered in order, and tick them off as you play. If your layout can't play a step (say, a black key in Chords + Melody), the lesson offers to switch. Lessons are written in C major; if you're in another key there's a one-click reset. Progress is saved.
+
+**Ear training.** Four games, three levels each: *Find the note*, *Intervals*, *Happy or sad?* and *Name that chord*. You answer by playing: the reference key ("home", "1st") and, on easier levels, the possible answers are lit. Best streaks are saved.
+
+On the Learn tab **F2** plays the example / question again and **F3** goes to the next step (unless your layout uses those keys).
+
 ## Keybinds
 
 Open the **Keybinds** tab:
@@ -206,7 +228,10 @@ src/
   latency.rs    tap-along latency measurement
   theme.rs      end4 / Material You colours and fonts
   music.rs      note names, chord naming, instruments
-  ui/           egui app (app.rs, app/play.rs, app/keybinds.rs), custom widgets,
+  learn/        Learn mode logic (no UI): analysis.rs (the theory overlay),
+                intervals.rs, lessons.rs (all lesson content), ear.rs (games)
+  ui/           egui app (app.rs, app/play.rs, app/learn.rs, app/keybinds.rs),
+                custom widgets, circle.rs (circle of fifths),
                 visuals.rs (keyboard / fretboard / fingerboard / flute / pads / waveform)
 ```
 

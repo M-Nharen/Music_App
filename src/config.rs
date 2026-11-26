@@ -6,7 +6,7 @@ use crate::audio::sequencer::ArpMode;
 use crate::keymap::{BUILTIN_LAYOUTS, Keymap};
 use crate::theory::Scale;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -88,6 +88,39 @@ pub struct Config {
     /// Picture under the keyboard: "auto" (follows the instrument),
     /// "keyboard", "guitar", "strings", "flute", "drums" or "wave".
     pub visual: String,
+
+    // ---- Learn mode (Part 3).
+    pub learn: LearnProgress,
+}
+
+/// Lesson progress, ear-training records and the theory overlay switch.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct LearnProgress {
+    /// Show the "what you're hearing" panel on the Play tab.
+    pub explain: bool,
+    /// Ids of finished lessons.
+    pub done: BTreeSet<String>,
+    /// Lesson that was open last, and its step.
+    pub lesson: String,
+    pub step: usize,
+    /// Best first-try streak per ear game ("note", "interval", "quality", "chord").
+    pub best: BTreeMap<String, u32>,
+    /// Chosen level (0–2) per ear game.
+    pub levels: BTreeMap<String, usize>,
+}
+
+impl Default for LearnProgress {
+    fn default() -> Self {
+        Self {
+            explain: true,
+            done: BTreeSet::new(),
+            lesson: String::new(),
+            step: 0,
+            best: BTreeMap::new(),
+            levels: BTreeMap::new(),
+        }
+    }
 }
 
 impl Default for Config {
@@ -120,6 +153,7 @@ impl Default for Config {
             chord_instrument: None,
             bass_instrument: 0,
             visual: "auto".into(),
+            learn: LearnProgress::default(),
         }
     }
 }

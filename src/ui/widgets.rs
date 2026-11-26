@@ -6,7 +6,7 @@ use crate::theme::Palette;
 use egui::{
     Align2, Color32, CornerRadius, FontId, Key, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// One key cap on the drawn keyboard. `key` is None for keys the app can't
 /// see (Caps, Super…), which are drawn greyed out for orientation.
@@ -164,6 +164,37 @@ impl CapLabel {
     }
 }
 
+/// How strongly a key is pointed at (Learn mode).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HintKind {
+    /// Press this now (pulses).
+    Now,
+    /// Coming up next in the sequence.
+    Next,
+    /// One of the possible answers.
+    Option,
+    /// A reference key ("home", "first note").
+    Home,
+    /// The right answer, shown after answering.
+    Correct,
+}
+
+/// A highlighted key with a little tag drawn at the bottom ("1", "home", "sad").
+#[derive(Clone, Debug, PartialEq)]
+pub struct Hint {
+    pub kind: HintKind,
+    pub tag: String,
+}
+
+/// Where a key sits on the drawn keyboard: (row, column). Row 0 is the
+/// number row, row 3 the Z row.
+pub fn key_position(key: KeyId) -> Option<(usize, usize)> {
+    rows()
+        .iter()
+        .enumerate()
+        .find_map(|(r, row)| row.iter().position(|c| c.key == Some(key)).map(|c| (r, c)))
+}
+
 pub struct KeyboardView<'a> {
     pub keymap: &'a Keymap,
     pub palette: &'a Palette,
@@ -173,6 +204,8 @@ pub struct KeyboardView<'a> {
     pub show_notes: bool,
     /// Text and colour for a bound key.
     pub label: &'a dyn Fn(Action) -> CapLabel,
+    /// Keys to point at (Learn mode). Empty elsewhere.
+    pub hints: &'a HashMap<KeyId, Hint>,
 }
 
 impl KeyboardView<'_> {
@@ -187,6 +220,14 @@ impl KeyboardView<'_> {
         let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
         let painter = ui.painter_at(rect.expand(2.0));
         let mut clicked = None;
+        // 0..1 pulse for "press this now" keys.
+        let pulse = if self.hints.is_empty() {
+            0.0
+        } else {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(40));
+            ((ui.input(|i| i.time) * 4.0).sin() * 0.5 + 0.5) as f32
+        };
 
         for (r, row) in rows().iter().enumerate() {
             let mut x = rect.left();
@@ -202,6 +243,7 @@ impl KeyboardView<'_> {
                 let held = cap.key.is_some_and(|k| self.held.contains(&k));
                 let selected = cap.key.is_some() && cap.key == self.selected;
                 let label = action.map(|a| (self.label)(a));
+                let hint = cap.key.and_then(|k| self.hints.get(&k));
 
                 let (fill, text) = if held {
                     (p.primary, p.on_primary)
@@ -271,6 +313,39 @@ impl KeyboardView<'_> {
                     }
                 } else {
                     painter.rect_filled(cap_rect, radius, fill);
+                }
+                if let Some(h) = hint {
+                    let (width, color) = match h.kind {
+                        HintKind::Now => (2.5 + 2.0 * pulse, p.tertiary),
+                        HintKind::Correct => (3.5, p.tertiary),
+                        HintKind::Next => (1.5, p.tertiary.gamma_multiply(0.55)),
+                        HintKind::Option => (2.0, p.on_surface.gamma_multiply(0.75)),
+                        HintKind::Home => (2.0, p.outline),
+                    };
+                    if matches!(h.kind, HintKind::Now | HintKind::Correct) && !held {
+                        painter.rect_filled(
+                            cap_rect,
+                            radius,
+                            p.tertiary.gamma_multiply(0.18 + 0.17 * pulse),
+                        );
+                    }
+                    painter.rect_stroke(
+                        cap_rect.expand(1.0),
+                        radius,
+                        Stroke::new(width, color),
+                        StrokeKind::Outside,
+                    );
+                    if !h.tag.is_empty() {
+                        let tag_font = FontId::proportional((unit * 0.17).clamp(8.0, 11.0));
+                        let galley = painter.layout_no_wrap(h.tag.clone(), tag_font, p.surface);
+                        let size = galley.size() + vec2(8.0, 2.0);
+                        let tag_rect = Rect::from_center_size(
+                            pos2(cap_rect.center().x, cap_rect.bottom() - size.y / 2.0 - 1.0),
+                            size,
+                        );
+                        painter.rect_filled(tag_rect, CornerRadius::same(255), color);
+                        painter.galley(tag_rect.min + vec2(4.0, 1.0), galley, p.surface);
+                    }
                 }
                 if selected {
                     painter.rect_stroke(
@@ -518,10 +593,14 @@ pub fn chip(ui: &mut Ui, fill: Color32, text_color: Color32, text: impl Into<Str
         .corner_radius(CornerRadius::same(255))
         .inner_margin(egui::Margin::symmetric(12, 5))
         .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new(text.into())
-                    .color(text_color)
-                    .size(13.5),
+            // Never squeeze a chip; wrapping layouts move it to the next line.
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(text.into())
+                        .color(text_color)
+                        .size(13.5),
+                )
+                .wrap_mode(egui::TextWrapMode::Extend),
             );
         });
 }

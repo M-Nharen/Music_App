@@ -2,6 +2,7 @@
 //! The Play and Keybinds tabs live in `app/play.rs` and `app/keybinds.rs`.
 
 mod keybinds;
+mod learn;
 mod play;
 
 use crate::audio::patterns::Pattern;
@@ -37,6 +38,7 @@ const FIXED_STYLES: [(&str, &str); 3] = [
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
     Play,
+    Learn,
     Keybinds,
     Audio,
     KeyTest,
@@ -116,6 +118,9 @@ pub struct QwertoneApp {
     max_held: usize,
     best_combo: Vec<KeyId>,
 
+    /// Learn mode: lessons, ear training, theory overlay.
+    learn: learn::LearnUi,
+
     toast: Option<(String, Instant)>,
     last_poll: Instant,
 }
@@ -185,9 +190,11 @@ impl QwertoneApp {
             tap_result: None,
             max_held: 0,
             best_combo: Vec::new(),
+            learn: learn::LearnUi::new(&Default::default()),
             toast: None,
             last_poll: Instant::now(),
         };
+        app.learn = learn::LearnUi::new(&app.cfg.learn);
         if let Some(e) = cfg_err {
             app.notify(e);
         }
@@ -667,6 +674,7 @@ impl QwertoneApp {
                     e.note_on(note, self.velocity());
                 }
                 self.sounding.insert(key, note);
+                self.learn_event(crate::learn::ear::Played::Note(note));
             }
             Action::Chord(c) => {
                 if self.chord_keys.iter().any(|(k, _)| *k == key) {
@@ -675,6 +683,9 @@ impl QwertoneApp {
                 self.chord_keys.push((key, c));
                 self.chord_latched = false;
                 self.play_chord(c, true);
+                if let Some(ev) = self.chord_event() {
+                    self.learn_event(ev);
+                }
             }
             Action::Mod(m) => {
                 if !self.mod_keys.iter().any(|(k, _)| *k == key) {
@@ -881,6 +892,21 @@ impl QwertoneApp {
             }
             return true;
         }
+        // Learn tab: F2 hear again, F3 next (unless the layout uses them).
+        if self.tab == Tab::Learn
+            && pressed
+            && self.keymap.get(k).is_none()
+            && matches!(k, KeyId::Key(Key::F2 | Key::F3))
+        {
+            if !repeat {
+                if k == KeyId::Key(Key::F2) {
+                    self.learn_replay();
+                } else {
+                    self.learn_next();
+                }
+            }
+            return true;
+        }
         // Ctrl/Alt + key is a shortcut unless this layout uses Ctrl/Alt.
         let shortcut = ((modifiers.ctrl || modifiers.command)
             && self.keymap.get(KeyId::Ctrl).is_none())
@@ -920,6 +946,10 @@ impl QwertoneApp {
         }
         if self.tap.running && self.tap.done() {
             self.finish_tap_test();
+        }
+        // Lesson / ear-training examples.
+        if self.tick_player() {
+            ctx.request_repaint_after(Duration::from_millis(10));
         }
 
         // Debounced config save.
@@ -1066,6 +1096,7 @@ impl QwertoneApp {
             ui.add_space(16.0);
             for (tab, label) in [
                 (Tab::Play, "Play"),
+                (Tab::Learn, "Learn"),
                 (Tab::Keybinds, "Keybinds"),
                 (Tab::Audio, "Audio & latency"),
                 (Tab::KeyTest, "Keyboard test"),
@@ -1084,6 +1115,9 @@ impl QwertoneApp {
                     })
                     .corner_radius(egui::CornerRadius::same(255));
                 if ui.add(btn).clicked() {
+                    if self.tab != tab {
+                        self.stop_player();
+                    }
                     self.tab = tab;
                     self.capture_for = None;
                 }
@@ -1555,6 +1589,7 @@ impl QwertoneApp {
             selected: None,
             show_notes: false,
             label: &label,
+            hints: &HashMap::new(),
         }
         .show(ui);
         ui.label(
@@ -1581,6 +1616,7 @@ impl eframe::App for QwertoneApp {
                     self.held.clear();
                     self.mod_keys.clear();
                     self.all_notes_off();
+                    self.stop_player();
                     keep.push(ev);
                 }
                 Event::Key {
@@ -1611,6 +1647,9 @@ impl eframe::App for QwertoneApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.poll(&ctx);
+        if self.update_overlay() {
+            ctx.request_repaint_after(Duration::from_millis(400));
+        }
         let p = self.palette;
 
         egui::Panel::top("header")
@@ -1629,6 +1668,7 @@ impl eframe::App for QwertoneApp {
             )
             .show(ui, |ui| match self.tab {
                 Tab::Play => self.play_tab(ui),
+                Tab::Learn => self.learn_tab(ui),
                 Tab::Keybinds => self.keybinds_tab(ui),
                 Tab::Audio => self.audio_tab(ui),
                 Tab::KeyTest => self.keytest_tab(ui),

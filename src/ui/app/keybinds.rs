@@ -95,6 +95,7 @@ impl QwertoneApp {
             selected: self.selected_key,
             show_notes: true,
             label: &label,
+            hints: &HashMap::new(),
         }
         .show(ui);
         drop(label);

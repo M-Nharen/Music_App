@@ -26,8 +26,8 @@ This file is the shared memory between build sessions. Each session: read it, bu
 |---|---|---|
 | 1 | Engine, Piano layout, keybind editor + TOML, latency test, Bluetooth device profiles + codec switch, keyboard test, end4 theme, PKGBUILD (`packaging/arch`) | **done** |
 | 2 | Chords + Melody layout: diatonic chord keys (I–vii°, borrowed chords), modifiers (7th/sus4/add9/major↔minor on Shift/Alt/Ctrl and 1–4), scale lock, smart voice-leading, strum, arpeggiator, auto-accompaniment patterns (text files), Isomorphic + Drum layouts, layout switcher (F1) | **done** (branch `part-2-chords`) |
-| 3 | Learn mode: theory overlay, lessons (notes → intervals → scales → chords → progressions → circle of fifths → modes), ear-training games | next |
-| 4 | Recording + looper, MIDI export, virtual MIDI out (ALSA seq / PipeWire MIDI), more instruments, metronome | |
+| 3 | Learn mode: theory overlay, lessons (notes → intervals → scales → chords → progressions → circle of fifths → modes), ear-training games | **done** (branch `part-3-learn`) |
+| 4 | Recording + looper, MIDI export, virtual MIDI out (ALSA seq / PipeWire MIDI), more instruments, metronome | next |
 | 5 | Song mode from MIDI files: falling notes labelled with keyboard keys, chord sheet, wait mode, loop + slow down, scoring, one-key mode, auto song layout, simplify/transpose | |
 | 6 | Python pipeline: Demucs stems → extraction modes (chords only / melody only via CREPE / chords+melody / full via Basic Pitch / single instrument incl. piano model + drums / simplified) + confidence highlighting + note editor. Live listen mode | |
 | 7 | Jam mode: stem mixer with your part muted, time-stretch, Bluetooth delay compensation of backing + visuals | |
@@ -35,6 +35,20 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 9 | Polish: themes, stats, streaks, more lessons | |
 
 ## Notes for the next session
+
+### From Part 3
+
+- **Branching:** `part-3-learn` was built on `part-2-chords`. Part 6 (`analyzer/`, Python) was being built in parallel in another session; Part 3 doesn't touch `analyzer/`, so the two should merge cleanly.
+- **Layout:** pure logic lives in `src/learn/` (tested, no egui): `analysis.rs` (overlay), `intervals.rs`, `lessons.rs` (all lesson content as `const` data), `ear.rs` (game questions + scoring), `Rng` (xorshift, no crate). The UI is `src/ui/app/learn.rs`; the circle of fifths is `src/ui/circle.rs`.
+- **Overlay** (`analysis::explain(&Heard{melody, chord, tonic_pc, scale})`): uses the chord engine's `Chord` when a chord key sounds (so name/numeral match the key caps), otherwise identifies free-play notes with its own shape table (`SHAPES`: triads, sus, power, 6/7/9 chords; bass note decides C6 vs Am7). `role()` gives the chord's job per key (major vs minor-home scales), `motion()` names cadences between consecutive chords, `spell()` spells borrowed notes as b3/b6/b7. `update_overlay()` runs every frame; when the note count drops (letting go of a chord key by key) it waits 350 ms before replacing the explanation. It shows on the Play tab when `cfg.learn.explain` (toolbar "Explain").
+- **Lesson targets are notes/chords, never keys.** `Target::Note(semitones above lesson C)`, `Together(&[..])` (held at once, any octave), `Chord("V")` (roman numeral in C). `resolve_targets()` maps them to keys of the current keymap: exact note first, else the same note name in the nearest octave; chords use a chord key with the same root + family, else fall back to the triad's notes. Unplayable → banner with "Switch to Piano/Chords". "Lesson C" = `BASE_NOTE + 12 × octave` (ignores transpose; there's a "Set key to C major" banner).
+- **Lesson text placeholders:** `{n:4}` key for a note, `{c:V}` key for a chord, `{a:<action text>}` keys for any keymap action. `lessons::tests` checks every placeholder and numeral parses. To add a lesson, add a `Lesson` to `CHAPTERS`; ids are saved in config, so don't rename them.
+- **Input:** `play_key` pushes `Played::Note` / `Played::Chord{root_pc, family}` into `learn.events` only while the Learn tab is open; the lesson / game consumes them each frame. "Hold together" targets are checked against what's held (`sounding` + chord voicing), and need a fresh key press between two targets (`armed`). F2 / F3 are Learn-tab shortcuts only when the keymap doesn't bind them.
+- **Example playback** (`Player` in learn.rs) is timed from the UI thread (`tick_player` in `poll`) using plain NoteOn/NoteOff on channel 0. Good enough for examples; Part 4/5 could move it to the audio-thread sequencer for sample accuracy (and its own channel so it can't cut a note the user holds).
+- **Keyboard hints:** `KeyboardView.hints: &HashMap<KeyId, Hint>` (`HintKind::Now` pulses; `Next`, `Option`, `Home`, `Correct`) with a small tag drawn inside the cap. Every other caller passes an empty map. Part 5 (falling notes / wait mode) can reuse this to light the next key. `widgets::key_position` gives a key's row/column.
+- **Config:** `[learn]` table (`LearnProgress`: `explain`, `done`, `lesson`, `step`, `best`, `levels`), all `#[serde(default)]`.
+- Headless testing as before (Xvfb + ALSA null + xdotool); `xdotool key` presses and releases within one frame, so use `keydown`/`sleep`/`keyup` to see the overlay react.
+- Ideas not done: spaced repetition for the ear games (ask missed items more), rhythm lessons (needs Part 4's metronome), sight-reading / staff notation, per-lesson "free play" checks ("play any note of the scale"), a mode drone for the modes lessons, explaining the accompaniment's bass/drums.
 
 ### From Part 2
 

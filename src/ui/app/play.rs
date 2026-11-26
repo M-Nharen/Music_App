@@ -32,6 +32,10 @@ impl QwertoneApp {
                     card(ui, &p, "", |ui| now_playing(ui, &p, &sounding));
                 }
                 ui.add_space(6.0);
+                if self.cfg.learn.explain && (has_notes || has_chords) {
+                    self.overlay_card(ui, true);
+                    ui.add_space(6.0);
+                }
 
                 let label = self.cap_label();
                 KeyboardView {
@@ -41,6 +45,7 @@ impl QwertoneApp {
                     selected: None,
                     show_notes: true,
                     label: &label,
+                    hints: &HashMap::new(),
                 }
                 .show(ui);
                 drop(label);
@@ -236,6 +241,17 @@ impl QwertoneApp {
                     "Pedal off"
                 },
             );
+            if has_notes {
+                let mut explain = self.cfg.learn.explain;
+                if ui
+                    .checkbox(&mut explain, "Explain")
+                    .on_hover_text("Show what you're playing in plain words: chord name, its job in the key, why it sounds happy, sad or tense.")
+                    .changed()
+                {
+                    self.cfg.learn.explain = explain;
+                    self.mark_dirty();
+                }
+            }
             ui.add_space(8.0);
             ui.label("Volume");
             let mut vol = self.cfg.volume;

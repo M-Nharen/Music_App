@@ -6,6 +6,7 @@ mod devices;
 mod drums;
 mod keymap;
 mod latency;
+mod learn;
 mod music;
 mod theme;
 mod theory;
