@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/M-Nharen/Music_App/analyzer/schema/lyrics.schema.json",
+  "title": "Qwertone lyrics (format version 1)",
+  "description": "lyrics.json written next to song.json by qwertone-analyze. See SONG_FORMAT.md.",
+  "type": "object",
+  "required": ["format", "format_version", "analyzer", "song", "status", "language", "has_word_timing",
+               "offset", "sources", "lines"],
+  "properties": {
+    "format": {"const": "qwertone-lyrics"},
+    "format_version": {"const": 1},
+    "analyzer": {
+      "type": "object",
+      "required": ["version", "created", "fingerprint"],
+      "properties": {
+        "version": {"type": "string"},
+        "lyrics_version": {"type": "integer"},
+        "created": {"type": "string"},
+        "fingerprint": {"type": "string"},
+        "online": {"type": "boolean"}
+      }
+    },
+    "song": {
+      "type": "object",
+      "required": ["title", "artist", "album", "duration", "sha256"],
+      "properties": {
+        "title": {"type": ["string", "null"]},
+        "artist": {"type": ["string", "null"]},
+        "album": {"type": ["string", "null"]},
+        "duration": {"type": ["number", "null"]},
+        "sha256": {"type": "string"}
+      }
+    },
+    "status": {"enum": ["synced", "plain", "instrumental", "not_found"]},
+    "language": {"type": "string", "minLength": 2},
+    "has_word_timing": {"type": "boolean"},
+    "offset": {"type": "number"},
+    "sources": {
+      "type": "object",
+      "required": ["words", "timing", "translation", "transliteration"],
+      "properties": {
+        "words": {"$ref": "#/$defs/sourceOrNull"},
+        "timing": {"$ref": "#/$defs/sourceOrNull"},
+        "translation": {"$ref": "#/$defs/sourceOrNull"},
+        "transliteration": {"$ref": "#/$defs/sourceOrNull"}
+      }
+    },
+    "lines": {"type": "array", "items": {"$ref": "#/$defs/line"}}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "synced"}}},
+     "then": {"properties": {"lines": {"items": {"properties": {
+       "start": {"type": "number"}, "end": {"type": "number"}}}}}}},
+    {"if": {"properties": {"status": {"enum": ["instrumental", "not_found"]}}},
+     "then": {"properties": {"lines": {"maxItems": 0}}}}
+  ],
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["kind", "name", "url", "file", "fetched"],
+      "properties": {
+        "kind": {"enum": ["file", "embedded", "lrclib", "generated", "user", "whisper", "translator"]},
+        "name": {"type": "string"},
+        "url": {"type": ["string", "null"]},
+        "file": {"type": ["string", "null"]},
+        "fetched": {"type": ["string", "null"]},
+        "modified": {"type": "string"},
+        "sha256": {"type": "string"},
+        "id": {"type": ["integer", "null"]},
+        "tag": {"type": "string"},
+        "copy": {"type": "string"},
+        "version": {"type": "integer"}
+      }
+    },
+    "sourceOrNull": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/source"}]},
+    "time": {"type": ["number", "null"]},
+    "word": {
+      "type": "object",
+      "required": ["text", "start", "end", "start_beat", "end_beat"],
+      "properties": {
+        "text": {"type": "string"},
+        "start": {"type": "number"},
+        "end": {"type": "number"},
+        "start_beat": {"type": ["number", "null"]},
+        "end_beat": {"type": ["number", "null"]},
+        "tanglish": {"type": ["string", "null"]}
+      }
+    },
+    "line": {
+      "type": "object",
+      "required": ["start", "end", "start_beat", "end_beat", "text", "language", "tanglish", "translation", "words"],
+      "properties": {
+        "start": {"$ref": "#/$defs/time"},
+        "end": {"$ref": "#/$defs/time"},
+        "start_beat": {"$ref": "#/$defs/time"},
+        "end_beat": {"$ref": "#/$defs/time"},
+        "text": {"type": "string"},
+        "language": {"type": "string"},
+        "tanglish": {"type": ["string", "null"]},
+        "translation": {"type": ["string", "null"]},
+        "words": {"oneOf": [{"type": "null"}, {"type": "array", "items": {"$ref": "#/$defs/word"}}]},
+        "sources": {
+          "type": "object",
+          "description": "Per-line overrides of the top-level sources (e.g. a user edit). Missing keys = top level.",
+          "properties": {
+            "words": {"$ref": "#/$defs/sourceOrNull"},
+            "timing": {"$ref": "#/$defs/sourceOrNull"},
+            "translation": {"$ref": "#/$defs/sourceOrNull"},
+            "transliteration": {"$ref": "#/$defs/sourceOrNull"}
+          }
+        }
+      }
+    }
+  }
+}

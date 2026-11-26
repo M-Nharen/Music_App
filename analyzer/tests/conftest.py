@@ -4,6 +4,7 @@ and the slow analyses are run once and shared."""
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from qwertone_analyzer import backends, pipeline, stems  # noqa: E402
 from qwertone_analyzer.progress import configure  # noqa: E402
 
 configure(quiet=True)
+# never ask LRCLIB from the test suite (test_lyrics.py uses a fake server instead)
+os.environ["QWERTONE_OFFLINE"] = "1"
 REAL_SEPARATE = stems.separate  # the fake_stems fixture swaps this out
 
 needs_crepe = pytest.mark.skipif(not backends.has_crepe(), reason="torchcrepe not installed")

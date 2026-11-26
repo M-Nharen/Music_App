@@ -104,4 +104,8 @@ def status() -> dict[str, str]:
         out["piano model"] = "ok" if ck.exists() else "installed, weights download on first use (~165 MB)"
     else:
         out["piano model"] = "missing -> piano mode uses Basic Pitch instead"
+    import importlib.util
+    out["lyrics"] = "local .lrc, file tags, LRCLIB (online), Tanglish built in"
+    out["mutagen (SYLT)"] = "ok" if importlib.util.find_spec("mutagen") else \
+        "missing -> synced ID3 SYLT lyrics are skipped (plain tag lyrics still work)"
     return out

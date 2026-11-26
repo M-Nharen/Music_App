@@ -11,7 +11,7 @@ from .cache import cache_size, clear_cache, default_cache_root
 from .pipeline import INSTRUMENTS, Options, analyze
 from .progress import configure, event
 
-SUBCOMMANDS = {"analyze", "doctor", "cache", "download-models", "-h", "--help", "--version"}
+SUBCOMMANDS = {"analyze", "lyrics", "import-lrc", "doctor", "cache", "download-models", "-h", "--help", "--version"}
 
 MODE_HELP = """\
 modes:
@@ -59,10 +59,44 @@ def _analyze_parser(sub) -> argparse.ArgumentParser:
     g.add_argument("--no-cache", dest="use_cache", action="store_false")
     g.add_argument("--force", action="store_true", help="redo everything even if cached")
 
+    g = p.add_argument_group("lyrics")
+    g.add_argument("--no-lyrics", dest="lyrics", action="store_false", help="skip the lyrics step")
+    g.add_argument("--offline", dest="lyrics_online", action="store_false",
+                   help="don't ask LRCLIB (local .lrc and tags only)")
+
     g = p.add_argument_group("output")
     g.add_argument("-q", "--quiet", action="store_true")
     g.add_argument("--json-progress", action="store_true", help="progress as JSON lines on stderr (for the app)")
     return p
+
+
+def _lyrics_common(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--offline", action="store_true", help="don't ask LRCLIB (cached answers are still used)")
+    p.add_argument("--refresh", action="store_true", help="ask LRCLIB again instead of using its cached answer")
+    p.add_argument("--language", help="song language if the guess is wrong: ta, en, ta-Latn (Tanglish) ...")
+    p.add_argument("--title", help="look up this title instead of the one in song.json")
+    p.add_argument("--artist")
+    p.add_argument("--album")
+    p.add_argument("-o", "--out", dest="out_dir", help="where song folders are (to find SONG by its audio file)")
+    p.add_argument("--cache-dir", help=f"default {default_cache_root()}")
+    p.add_argument("--no-cache", dest="use_cache", action="store_false")
+    p.add_argument("--show", action="store_true", help="print the lines (with Tanglish) afterwards")
+    p.add_argument("-q", "--quiet", action="store_true")
+    p.add_argument("--json-progress", action="store_true")
+
+
+def _lyrics_parsers(sub) -> None:
+    p = sub.add_parser("lyrics", help="(re)make lyrics.json for analysed songs, without re-analysing",
+                       description="Re-run only the lyrics step. SONG is a song folder, its song.json, "
+                                   "or the audio/MIDI file you analysed.")
+    p.add_argument("songs", nargs="*", metavar="SONG")
+    p.add_argument("--all", action="store_true", help="every song folder in the songs directory")
+    p.add_argument("--force", action="store_true", help="rebuild even if lyrics.json is up to date")
+    _lyrics_common(p)
+    p = sub.add_parser("import-lrc", help="use your own .lrc for a song (wins over every other source)")
+    p.add_argument("lrc", type=Path, help="the .lrc (or plain .txt) file")
+    p.add_argument("song", metavar="SONG", help="song folder, song.json, or the analysed audio/MIDI file")
+    _lyrics_common(p)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
     _analyze_parser(sub)
+    _lyrics_parsers(sub)
     sub.add_parser("doctor", help="show which engines are installed and whether a GPU is used")
     c = sub.add_parser("cache", help="show or clear the analysis cache")
     c.add_argument("action", choices=("info", "clear"))
@@ -102,6 +137,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "download-models":
         return _download(args)
 
+    if args.cmd in ("lyrics", "import-lrc"):
+        return _lyrics_cmd(args)
+
     configure(json_lines=args.json_progress, quiet=args.quiet)
     opts = Options(**{k: v for k, v in vars(args).items() if k in Options.__dataclass_fields__})
     try:
@@ -112,6 +150,61 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(res.song_dir)
     return 0
+
+
+def _lyrics_cmd(args) -> int:
+    from . import lyrics
+    from .writer import default_songs_dir
+
+    configure(json_lines=args.json_progress, quiet=args.quiet)
+    songs_dir = Path(args.out_dir).expanduser() if args.out_dir else default_songs_dir()
+
+    def options(force: bool = False) -> "lyrics.LyricsOptions":
+        return lyrics.LyricsOptions(online=not args.offline, refresh=args.refresh, force=force,
+                                    language=args.language, title=args.title, artist=args.artist,
+                                    album=args.album, cache_dir=args.cache_dir, use_cache=args.use_cache)
+    try:
+        if args.cmd == "import-lrc":
+            if not args.lrc.exists():
+                raise FileNotFoundError(args.lrc)
+            d = lyrics.find_song_dir(args.song, songs_dir)
+            results = [(d, lyrics.import_lrc(args.lrc, d, options()))]
+        else:
+            targets = [Path(s) for s in args.songs]
+            if args.all:
+                targets += sorted(p.parent for p in songs_dir.glob("*/song.json"))
+            if not targets:
+                raise ValueError("give a SONG (folder, song.json or audio file) or --all")
+            if args.title and len(targets) > 1:
+                raise ValueError("--title/--artist/--album only make sense for one song")
+            results = []
+            for t in targets:
+                d = lyrics.find_song_dir(t, songs_dir)
+                results.append((d, lyrics.run_lyrics(d, options(args.force))))
+    except (ValueError, FileNotFoundError, OSError) as e:
+        event("error", message=str(e))
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    for d, r in results:
+        extra = f"  ({r.words_source} words" + (f", {r.timing_source} timing)" if r.timing_source else ")") \
+            if r.words_source else ""
+        print(f"{r.path}  {r.status}, {r.lines} lines{extra}{'  [up to date]' if r.skipped else ''}")
+        for n in r.notes:
+            print(f"  note: {n}")
+        if args.show:
+            _show_lyrics(r.path)
+    return 0
+
+
+def _show_lyrics(path: Path) -> None:
+    import json
+    with open(path) as f:
+        doc = json.load(f)
+    for l in doc["lines"]:
+        t = f"{l['start']:7.2f}" if l["start"] is not None else "      -"
+        print(f"  {t}  {l['text']}")
+        if l.get("tanglish") and l["tanglish"] != l["text"]:
+            print(f"           {l['tanglish']}")
 
 
 def _download(args) -> int:

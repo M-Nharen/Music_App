@@ -13,6 +13,8 @@ One folder per song, by default under `~/.local/share/qwertone/songs/`
 ```
 ~/.local/share/qwertone/songs/<title-slug>-<first 8 hex of sha256>/
 ├── song.json          everything (source of truth)
+├── lyrics.json        lyrics, if the lyrics step ran (see "lyrics.json" below)
+├── lyrics/imported.lrc  an .lrc the user imported (`qwertone-analyze import-lrc`)
 ├── song.mid           all parts as one type-1 MIDI file
 ├── midi/<part id>.mid each part on its own (handy for DAWs)
 └── stems/             separated audio, only for audio input with stems on
@@ -220,6 +222,112 @@ its own sound only, and say so to the user.
   piano mode).
 - Summing all stems gives back (almost exactly) the original mix, so Part 7
   can mute "your" part and play the rest.
+
+## lyrics.json
+
+Written by the lyrics step, right after `song.json` (and on its own with
+`qwertone-analyze lyrics SONG`). Schema:
+[`schema/lyrics.schema.json`](schema/lyrics.schema.json). It is a separate
+file with its own `format_version`, so re-fetching lyrics never touches
+`song.json`, and the app just checks whether `lyrics.json` exists next to it.
+
+Same conventions as `song.json`: times in seconds from the start of the
+recording, `start_beat`/`end_beat` as fractional indices into `song.json`'s
+`beats`, unknown keys ignored. Text is UTF-8 (Tamil script as is).
+
+```jsonc
+{
+  "format": "qwertone-lyrics",
+  "format_version": 1,
+  "analyzer": { "version": "0.6.0", "lyrics_version": 1, "created": "2026-11-26T10:59:27+00:00",
+                "fingerprint": "…", "online": true },
+  "song": { "title": "Kaalai Thendral", "artist": "…", "album": null,   // what was looked up
+            "duration": 30.0, "sha256": "…" },                          // = song.json source.sha256
+  "status": "synced",          // synced | plain (no timing) | instrumental | not_found
+  "language": "ta",            // BCP 47: ta, en, ta-Latn (Tanglish written in Latin letters), hi, te, ml, kn, und
+  "has_word_timing": true,     // some lines have "words"
+  "offset": 0.2,               // the source's [offset:] in seconds, ALREADY applied to every time
+  "sources": {                 // where each layer came from; null = not available
+    "words":  { "kind": "lrclib", "name": "LRCLIB", "url": "https://lrclib.net/api/get/4242",
+                "file": null, "fetched": "2026-11-26T10:59:27+00:00", "id": 4242,
+                "track": "…", "artist": "…", "album": "…", "duration": 30 },
+    "timing": { … },           // often the same object as words, can differ (local words + LRCLIB timing)
+    "translation": null,       // Part 10a-full (offline English translation)
+    "transliteration": { "kind": "generated", "name": "Qwertone Tanglish", "url": null, "file": null,
+                         "fetched": "…", "version": 1 }   // null when no line has Tamil script
+  },
+  "lines": [
+    {
+      "start": 2.0, "end": 5.5,            // null for status "plain"
+      "start_beat": 3.0, "end_beat": 10.0, // null when plain or song.json has no beats
+      "text": "காலை தென்றல் வந்தது",
+      "language": "ta",                    // per line: songs mix Tamil and English lines
+      "tanglish": "kaalai thendral vandhadhu",  // Tamil script -> Tanglish; = text for ta-Latn lines; else null
+      "translation": null,                 // English, machine-made, Part 10a-full
+      "words": [                           // null unless the source has word timing (enhanced LRC)
+        { "text": "காலை", "start": 2.0, "end": 2.6, "start_beat": 3.0, "end_beat": 4.2,
+          "tanglish": "kaalai" }
+      ]
+      // "sources": { "timing": { "kind": "user", … } }   optional per-line override, see below
+    }
+  ]
+}
+```
+
+### Sources
+
+Every source object has `kind`, `name`, `url` (or null), `file` (or null) and
+`fetched` (ISO 8601, when Qwertone got it; for an import, when it was
+imported). Extra keys by kind:
+
+| kind | what | extra keys |
+|---|---|---|
+| `file` | an .lrc next to the audio (`Song.lrc`), or one imported into the song folder | `sha256`, `modified`, `by` (LRC `[by:]`), `copy` (`lyrics/imported.lrc` for imports; `file` is then the original path) |
+| `embedded` | the audio file's own tags (USLT / LYRICS / ©lyr, ID3 SYLT) | `tag`, `sha256` |
+| `lrclib` | [LRCLIB](https://lrclib.net) | `id`, `track`, `artist`, `album`, `duration` |
+| `generated` | made by the analyzer (Tanglish) | `version` |
+| `user` | edited in the app (Part 10b) | anything useful, e.g. `edited` |
+| `whisper`, `translator` | reserved for Part 10a-full | |
+
+Top-level `sources` describe the whole song. A line may carry its own
+`sources` object with any of the same four keys; those override the top level
+for that line only (e.g. after the user retimes one line in the editor,
+that line gets `"sources": {"timing": {"kind": "user", …}}`). Keys a line
+doesn't have fall back to the top level.
+
+### Which source wins
+
+1. `lyrics/imported.lrc` in the song folder,
+2. an .lrc next to the audio file, same name (`Song.mp3` → `Song.lrc`),
+3. lyrics in the audio file's tags,
+4. LRCLIB, by title, artist, album and duration (±3 s). If song.json has no
+   artist and the file is named `Artist - Title`, that is used.
+
+The first one with **synced** lyrics wins. If 1–3 only have plain text,
+LRCLIB is still asked: when its synced lyrics are the same text (≥ 80 %
+similar line by line, same line count), `words` stays the local source and
+`timing` becomes LRCLIB. If the text differs, the local plain lyrics are kept
+(status `plain`).
+
+### Timing rules
+
+- A line ends where the next line starts, or at a timestamped empty line
+  (LRC's "instrumental gap" marker), or at its last word's end stamp; the
+  last line ends with the song. `end >= start` always.
+- A line with several timestamps (a repeated chorus) appears once per
+  timestamp, sorted by time; word times move with it.
+- Words without an end stamp end where the next word starts (the last one:
+  at the line end).
+- The app adds the same Bluetooth latency offset as Song mode; nothing in
+  lyrics.json accounts for it.
+
+### Tanglish
+
+Rule-based transliteration (`qwertone_analyzer/tanglish.py`), written the way
+Tamil is commonly typed: long vowels doubled (`aa`, `ee`, `oo`), `zh` for ழ,
+and the sound of க/ச/ட/த/ப/ற picked from the letters around it (`kaadhal`,
+`nenjam`, `endru`, `vanakkam`). Non-Tamil text in a line is kept as is.
+`version` in the transliteration source changes when the rules change.
 
 ## Reading it from Rust (sketch for Part 5)
 
