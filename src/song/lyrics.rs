@@ -450,6 +450,30 @@ impl Lyrics {
         line.and_then(|s| s.get(what)).or_else(|| self.sources.get(what))
     }
 
+    /// Times to the millisecond (no 1.9000000000000001 in the file).
+    pub fn round_times(&mut self) {
+        let r = |x: &mut f64| *x = (*x * 1000.0).round() / 1000.0;
+        let ro = |x: &mut Option<f64>| {
+            if let Some(v) = x {
+                *v = (*v * 1000.0).round() / 1000.0;
+            }
+        };
+        for l in &mut self.lines {
+            ro(&mut l.start);
+            ro(&mut l.end);
+            ro(&mut l.start_beat);
+            ro(&mut l.end_beat);
+            if let Some(w) = &mut l.words {
+                for w in w {
+                    r(&mut w.start);
+                    r(&mut w.end);
+                    ro(&mut w.start_beat);
+                    ro(&mut w.end_beat);
+                }
+            }
+        }
+    }
+
     /// Recompute every beat position from the times.
     pub fn fix_beats(&mut self, grid: &BeatGrid) {
         for l in &mut self.lines {
@@ -1060,6 +1084,7 @@ impl LyricsEditor {
             }
         }
         doc.fix_beats(grid);
+        doc.round_times();
         doc
     }
 }

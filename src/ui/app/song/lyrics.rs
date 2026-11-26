@@ -1122,9 +1122,7 @@ impl QwertoneApp {
                 _ => 0,
             };
             let doubtful = line.confidence.is_some_and(|c| c < 0.5);
-            let mut color = if !synced {
-                p.on_surface
-            } else if active {
+            let mut color = if !synced || active {
                 p.on_surface
             } else if past {
                 p.on_surface_variant.gamma_multiply(0.42)
@@ -1501,7 +1499,7 @@ impl QwertoneApp {
                                     set_now = Some(i);
                                 }
                                 let mut s = line.text.clone();
-                                let w = (ui.available_width() - 110.0).max(120.0);
+                                let w = (ui.available_width() - 190.0).max(120.0);
                                 let r = ui.add(egui::TextEdit::singleline(&mut s).desired_width(w));
                                 if r.changed() {
                                     text_change = Some((i, s));
@@ -1643,7 +1641,7 @@ fn source_row(ui: &mut egui::Ui, p: &Palette, s: &crate::song::lyrics::Source) {
     }
     let mut extra = Vec::new();
     for k in ["model", "library", "style"] {
-        if let Some(v) = s.get(k) {
+        if let Some(v) = s.get(k).filter(|v| !v.eq_ignore_ascii_case(&s.name)) {
             extra.push(v);
         }
     }
