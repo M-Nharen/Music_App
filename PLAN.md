@@ -34,7 +34,7 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 8 | Spotify: PKCE login, search, remote control, now-playing → open practice version, sync mode | |
 | 9 | Polish: themes, stats, streaks, more lessons | |
 | 10a-lite | Lyrics engine, small (analyzer/ only): `.lrc` + embedded tags + LRCLIB synced lyrics, Tanglish transliteration, `lyrics.json` with source info for words / timing / translation | **done** (branch `part-10a-lyrics`) |
-| 10b | Lyrics in the app: Spotify-style Lyrics screen, current line inside the falling-notes area (toggle, top/bottom), source badge, lyrics editor, tap-along timing, Bluetooth offset + manual nudge | |
+| 10b | Lyrics in the app: Spotify-style Lyrics screen, current line inside the falling-notes area (toggle, top/bottom), source badge, lyrics editor, tap-along timing, Bluetooth offset + manual nudge | **done** (branch `part-10b-lyrics`, from `part-7-jam`) |
 | 10a-full | Lyrics engine, rest: Whisper (faster-whisper) transcription of the vocal stem with language auto-detect, force-aligning plain lyrics, offline English translation, AcoustID lookup | **done** (branch `part-10a-full`, includes 10a-lite) |
 
 ## Build order
@@ -47,7 +47,7 @@ Each part starts from the newest branch (it contains everything before it). Don'
 | 1 | 10a-lite lyrics engine (**done**) | `part-4a-record` | `part-10a-lyrics` | 4b (only edits `analyzer/`) |
 | 2 | 10a-full lyrics engine (**done**) | `part-10a-lyrics` | `part-10a-full` | — (only edits `analyzer/`) |
 | 3 | 7 Jam mode (**done**) | `part-4b-loop` (merged `part-10a-full` first) | `part-7-jam` | — |
-| 4 | 10b lyrics in the app | `part-7-jam` | `part-10b-lyrics` | — |
+| 4 | 10b lyrics in the app (**done**) | `part-7-jam` | `part-10b-lyrics` | — |
 | 5 | 8 Spotify (also: sync lyrics with Spotify playback) | latest | `part-8-spotify` | — |
 | 6 | 9 Polish, then merge everything into `main` | latest | `main` | — |
 
@@ -76,6 +76,54 @@ Each part starts from the newest branch (it contains everything before it). Don'
   latency offset as Song mode (`visual_delay_ms()`, see Part 7's "line up").
 
 ## Notes for the next session
+
+### From Part 10b (lyrics in the app)
+
+- **Branch:** `part-10b-lyrics` = `part-7-jam` + 10b. Part 8 starts here.
+- **Code:** model in `src/song/lyrics.rs` (reads `lyrics.json` with serde,
+  unknown keys kept on save via `#[serde(flatten)]`; `position(t)` = current
+  line / still sung / next; `word_at`; `texts(line, layers)` applies the
+  toggle rules; `LyricsEditor` with undo, retime, tap-along, text edits;
+  `save`; `to_lrc`). UI in `src/ui/app/song/lyrics.rs`. Settings in
+  `[lyrics]` (`LyricsSettings` in `config.rs`).
+- **Screens:** `SongView::Lyrics` (button "♪ Lyrics" in the song top bar)
+  and `SongView::LyricsEdit`. Wait mode is suspended on both (you listen /
+  tap); going back to Practice calls `song_restart_practice(heard)`. Empty
+  states: no `lyrics.json` → "Find lyrics" (`qwertone-analyze lyrics <dir>
+  --json-progress`), "Quick (no models)" (`--light --force`), "Import .lrc /
+  .txt…" (`import-lrc`), or paste text (an .lrc pasted in keeps its times) →
+  editor with tap-along. MIDI-only songs have no folder, so no lyrics.
+- **Clocks:** the falling-notes overlay uses the notes' clock (`song_ui.heard`,
+  which already includes `visual_delay_ms()`) + the nudge
+  (`cfg.lyrics.offset_ms`, + = earlier). The Lyrics screen and editor follow
+  *what you hear* by default (`follow_heard`, only differs with line-up on),
+  because singers follow the voice. Taps are stamped with what you hear,
+  without the nudge. Times are compared in seconds; beats are recomputed
+  from the beat grid on save (same mapping, so slow-down/loops line up).
+- **Saving (decided):** the editor writes `lyrics.json` directly (edited lines
+  get per-line `sources.timing` / `sources.words` = `{"kind": "user", "name":
+  "edited in Qwertone", "based_on": <old source>}`; retiming every line makes
+  the song-level `sources.timing` the user's) **and** `lyrics/imported.lrc`
+  (enhanced LRC with word stamps and gap markers, `[re:qwertone]`) +
+  `imported.json` (`"editor": "qwertone"`, `based_on`). The analyzer now
+  reads that meta and calls the source `kind: "user"` / "edited in Qwertone"
+  (`imported_candidate` in `lyrics.py`, test `test_app_editor_save_is_a_user_source`).
+  After a *text* edit the app runs `lyrics --force` to romanise / translate
+  the new words (edited lines show no romanised / English until then). Badge
+  → "Forget my edits" deletes our imported files and re-runs the step. A
+  one-time `lyrics.json.bak` is kept.
+- **Fonts:** `theme::install_fonts` adds Noto Sans Tamil / Telugu /
+  Devanagari / Kannada / Malayalam / Bengali / Gujarati / Gurmukhi / Oriya as
+  fallbacks (fontconfig, then the usual folders). Missing ones are listed on
+  the Lyrics screen when the song has non-Latin lines.
+- **Checked** under Xvfb (audio off, so playback / tap-along were checked by
+  unit tests, not by ear): overlay top + bottom, Lyrics screen with Tamil /
+  Telugu / Hindi / English / Tanglish lines, click-to-jump, badge details,
+  editor nudge + Ctrl+S writing both files.
+- **Ideas not done:** lyrics chip in the song list; a reaction-time
+  correction for taps; per-word retiming in the editor (words move with their
+  line; a text edit drops that line's word timing); Spotify sync (Part 8)
+  can reuse `Lyrics::position`.
 
 ### From Part 7 (Jam mode)
 

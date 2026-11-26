@@ -2350,7 +2350,11 @@ impl QwertoneApp {
                 Judgement::Miss => ("Missed".to_string(), p.error),
             };
             let galley = painter.layout_no_wrap(text, egui::FontId::proportional(18.0), c);
-            let pos = top + vec2(ui.available_width() * 0.5 - galley.size().x / 2.0, 14.0 + lyric_h);
+            let pos = top
+                + vec2(
+                    ui.available_width() * 0.5 - galley.size().x / 2.0,
+                    14.0 + lyric_h,
+                );
             let bg =
                 egui::Rect::from_min_size(pos - vec2(12.0, 5.0), galley.size() + vec2(24.0, 10.0));
             painter.rect_filled(

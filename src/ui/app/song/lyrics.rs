@@ -128,7 +128,11 @@ fn layer_labels(doc: &Lyrics) -> (String, String, String) {
         .translation
         .as_ref()
         .is_none_or(|s| s.machine_translation());
-    let english = if mt { "English (machine translation)" } else { "English" };
+    let english = if mt {
+        "English (machine translation)"
+    } else {
+        "English"
+    };
     (native.into(), roman.into(), english.into())
 }
 
@@ -225,7 +229,9 @@ impl QwertoneApp {
                         }
                         self.notify(match status.as_deref() {
                             Some("synced") => "Lyrics found, with timing.",
-                            Some("plain") => "Lyrics found, but without timing: tap along to time them.",
+                            Some("plain") => {
+                                "Lyrics found, but without timing: tap along to time them."
+                            }
                             Some("instrumental") => "This song is instrumental (no lyrics).",
                             Some("not_found") => "No lyrics found for this song.",
                             _ => "Lyrics updated.",
@@ -256,10 +262,15 @@ impl QwertoneApp {
 
     fn lyrics_run(&mut self, extra: &[&str]) {
         let (Some(program), Some(dir)) = (
-            self.song_ui.analyzer.clone().or_else(analyze::find_analyzer),
+            self.song_ui
+                .analyzer
+                .clone()
+                .or_else(analyze::find_analyzer),
             self.song_ui.lyrics.dir.clone(),
         ) else {
-            self.notify("The analyzer isn't installed (analyzer/setup.sh), so lyrics can't be looked up.");
+            self.notify(
+                "The analyzer isn't installed (analyzer/setup.sh), so lyrics can't be looked up.",
+            );
             return;
         };
         self.song_ui.lyrics.job_error = None;
@@ -271,7 +282,10 @@ impl QwertoneApp {
 
     fn lyrics_import(&mut self, lrc: &std::path::Path) {
         let (Some(program), Some(dir)) = (
-            self.song_ui.analyzer.clone().or_else(analyze::find_analyzer),
+            self.song_ui
+                .analyzer
+                .clone()
+                .or_else(analyze::find_analyzer),
             self.song_ui.lyrics.dir.clone(),
         ) else {
             // No analyzer: read the file here (no romanising / translation).
@@ -293,7 +307,9 @@ impl QwertoneApp {
 
     fn lyrics_pick_lrc(&mut self) {
         let (tx, rx) = unbounded();
-        let start = dirs::audio_dir().or_else(dirs::home_dir).unwrap_or_default();
+        let start = dirs::audio_dir()
+            .or_else(dirs::home_dir)
+            .unwrap_or_default();
         std::thread::spawn(move || {
             let try_run = |cmd: &str, args: &[&str]| -> Option<Option<PathBuf>> {
                 let out = std::process::Command::new(cmd).args(args).output().ok()?;
@@ -321,7 +337,12 @@ impl QwertoneApp {
     /// Typed / pasted lyrics: open them in the editor, ready to tap along.
     /// An .lrc pasted in keeps its times.
     fn lyrics_from_text(&mut self, text: &str, lang: &str) {
-        let dur = self.song_ui.song.as_ref().map(|s| s.duration).unwrap_or(0.0);
+        let dur = self
+            .song_ui
+            .song
+            .as_ref()
+            .map(|s| s.duration)
+            .unwrap_or(0.0);
         let doc = parse_pasted(text, lang);
         let timed = doc.synced();
         let mut ed = LyricsEditor::new(doc, dur);
@@ -336,7 +357,12 @@ impl QwertoneApp {
     }
 
     pub(super) fn lyrics_open_editor(&mut self, tap: bool) {
-        let dur = self.song_ui.song.as_ref().map(|s| s.duration).unwrap_or(0.0);
+        let dur = self
+            .song_ui
+            .song
+            .as_ref()
+            .map(|s| s.duration)
+            .unwrap_or(0.0);
         let Some(doc) = self.song_ui.lyrics.doc.clone() else {
             return;
         };
@@ -367,7 +393,8 @@ impl QwertoneApp {
     }
 
     fn lyrics_save(&mut self) {
-        let (Some(dir), Some(song)) = (self.song_ui.lyrics.dir.clone(), self.song_ui.song.as_ref()) else {
+        let (Some(dir), Some(song)) = (self.song_ui.lyrics.dir.clone(), self.song_ui.song.as_ref())
+        else {
             self.notify("Lyrics can only be saved for analysed songs (a song folder).");
             return;
         };
@@ -388,9 +415,15 @@ impl QwertoneApp {
                 let mut fresh = LyricsEditor::new(doc, ed.duration);
                 fresh.selected = ed.selected;
                 *ed = fresh;
-                let analyzer = self.song_ui.analyzer.clone().or_else(analyze::find_analyzer);
+                let analyzer = self
+                    .song_ui
+                    .analyzer
+                    .clone()
+                    .or_else(analyze::find_analyzer);
                 if rerun && analyzer.is_some() {
-                    self.notify("Saved. Making the English-letters and English lines for the new words…");
+                    self.notify(
+                        "Saved. Making the English-letters and English lines for the new words…",
+                    );
                     self.lyrics_run(&["--force"]);
                 } else if rerun {
                     self.notify("Saved. Install the analyzer to get English letters / English for the edited lines.");
@@ -432,7 +465,9 @@ impl QwertoneApp {
         if have.english {
             changed |= ui
                 .selectable_label(l.english, e)
-                .on_hover_text("What the words mean, translated by a computer: literal, sometimes wrong")
+                .on_hover_text(
+                    "What the words mean, translated by a computer: literal, sometimes wrong",
+                )
                 .clicked()
                 .then(|| l.english = !l.english)
                 .is_some();
@@ -521,8 +556,12 @@ impl QwertoneApp {
                 .checkbox(&mut l.overlay, "Show the current line in the falling notes")
                 .changed();
             ui.add_enabled_ui(l.overlay, |ui| {
-                c |= ui.selectable_value(&mut l.overlay_top, true, "Top").changed();
-                c |= ui.selectable_value(&mut l.overlay_top, false, "Bottom").changed();
+                c |= ui
+                    .selectable_value(&mut l.overlay_top, true, "Top")
+                    .changed();
+                c |= ui
+                    .selectable_value(&mut l.overlay_top, false, "Bottom")
+                    .changed();
                 c |= ui.checkbox(&mut l.overlay_next, "Next line too").changed();
             });
             if c {
@@ -561,8 +600,20 @@ impl QwertoneApp {
         let (main, upcoming) = match (pos.active, pos.line, pos.next) {
             (true, Some(i), n) => (Some(i), n),
             (false, _, Some(n)) => {
-                let soon = doc.lines[n].start.is_some_and(|s| s - t < 4.0 * self.song_ui.speed.max(0.25));
-                (soon.then_some(n), if soon { doc.lines[n + 1..].iter().position(|x| x.start.is_some() && !x.is_blank()).map(|k| n + 1 + k) } else { None })
+                let soon = doc.lines[n]
+                    .start
+                    .is_some_and(|s| s - t < 4.0 * self.song_ui.speed.max(0.25));
+                (
+                    soon.then_some(n),
+                    if soon {
+                        doc.lines[n + 1..]
+                            .iter()
+                            .position(|x| x.start.is_some() && !x.is_blank())
+                            .map(|k| n + 1 + k)
+                    } else {
+                        None
+                    },
+                )
             }
             _ => (None, None),
         };
@@ -572,7 +623,11 @@ impl QwertoneApp {
         let line = &doc.lines[main];
         let texts = doc.texts(line, want);
         let sung = pos.active && pos.line == Some(main);
-        let base = if sung { p.on_surface } else { p.on_surface_variant.gamma_multiply(0.7) };
+        let base = if sung {
+            p.on_surface
+        } else {
+            p.on_surface_variant.gamma_multiply(0.7)
+        };
         let mut galleys = Vec::new();
         if let Some((layer, text)) = texts.first() {
             let job = karaoke_job(
@@ -589,12 +644,15 @@ impl QwertoneApp {
             galleys.push(painter.layout_job(job));
         }
         for (_, text) in texts.iter().skip(1) {
-            galleys.push(painter.layout(
-                text.to_string(),
-                FontId::proportional(14.0),
-                p.on_surface_variant.gamma_multiply(if sung { 0.9 } else { 0.6 }),
-                width,
-            ));
+            galleys.push(
+                painter.layout(
+                    text.to_string(),
+                    FontId::proportional(14.0),
+                    p.on_surface_variant
+                        .gamma_multiply(if sung { 0.9 } else { 0.6 }),
+                    width,
+                ),
+            );
         }
         if l.overlay_next
             && let Some(n) = upcoming
@@ -610,7 +668,8 @@ impl QwertoneApp {
             }
         }
         let gap = 3.0;
-        let h: f32 = galleys.iter().map(|g| g.size().y).sum::<f32>() + gap * (galleys.len() as f32 - 1.0);
+        let h: f32 =
+            galleys.iter().map(|g| g.size().y).sum::<f32>() + gap * (galleys.len() as f32 - 1.0);
         let w = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
         let pad = vec2(16.0, 8.0);
         let y0 = if l.overlay_top {
@@ -623,7 +682,11 @@ impl QwertoneApp {
             pos2(area.center().x - w / 2.0 - pad.x, y0),
             vec2(w + pad.x * 2.0, h + pad.y * 2.0),
         );
-        painter.rect_filled(bg, egui::CornerRadius::same(14), p.surface_container_highest.gamma_multiply(0.88));
+        painter.rect_filled(
+            bg,
+            egui::CornerRadius::same(14),
+            p.surface_container_highest.gamma_multiply(0.88),
+        );
         let mut y = y0 + pad.y;
         for g in galleys {
             let x = area.center().x - g.size().x / 2.0;
@@ -631,7 +694,11 @@ impl QwertoneApp {
             painter.galley(pos2(x, y), g, p.on_surface);
             y += gh + gap;
         }
-        if l.overlay_top { bg.height() + 8.0 } else { 0.0 }
+        if l.overlay_top {
+            bg.height() + 8.0
+        } else {
+            0.0
+        }
     }
 
     // ------------------------------------------------------------ badge
@@ -645,7 +712,9 @@ impl QwertoneApp {
         let cur = self.lyrics_now().line;
         let words = doc.source(cur, SourceOf::Words);
         let timing = doc.source(cur, SourceOf::Timing);
-        let mut text = words.map(|s| s.name.clone()).unwrap_or_else(|| "unknown source".into());
+        let mut text = words
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| "unknown source".into());
         if let (Some(w), Some(t)) = (words, timing)
             && w.name != t.name
         {
@@ -830,7 +899,11 @@ impl QwertoneApp {
     fn lyrics_transport(&mut self, ui: &mut egui::Ui) {
         let p = self.palette;
         ui.horizontal_wrapped(|ui| {
-            if ui.button("⏮").on_hover_text("Back to the start (F6)").clicked() {
+            if ui
+                .button("⏮")
+                .on_hover_text("Back to the start (F6)")
+                .clicked()
+            {
                 self.song_restart();
             }
             let playing = self.song_playing();
@@ -850,13 +923,30 @@ impl QwertoneApp {
             {
                 self.song_play_pause();
             }
-            let dur = self.song_ui.song.as_ref().map(|s| s.duration).unwrap_or(0.0);
-            ui.label(RichText::new(format!("{} / {}", fmt_time(self.lyrics_time()), fmt_time(dur))).monospace());
+            let dur = self
+                .song_ui
+                .song
+                .as_ref()
+                .map(|s| s.duration)
+                .unwrap_or(0.0);
+            ui.label(
+                RichText::new(format!(
+                    "{} / {}",
+                    fmt_time(self.lyrics_time()),
+                    fmt_time(dur)
+                ))
+                .monospace(),
+            );
             ui.separator();
             ui.label("Speed");
             let mut s = self.song_ui.speed * 100.0;
             if ui
-                .add(egui::Slider::new(&mut s, 25.0..=150.0).suffix("%").integer().step_by(5.0))
+                .add(
+                    egui::Slider::new(&mut s, 25.0..=150.0)
+                        .suffix("%")
+                        .integer()
+                        .step_by(5.0),
+                )
                 .on_hover_text("F7 slower · F8 faster")
                 .changed()
             {
@@ -870,8 +960,11 @@ impl QwertoneApp {
         });
         let (dur, sections) = {
             let song = self.song_ui.song.as_ref().unwrap();
-            let secs: Vec<(f64, f64, String)> =
-                song.sections.iter().map(|s| (s.start, s.end, s.title())).collect();
+            let secs: Vec<(f64, f64, String)> = song
+                .sections
+                .iter()
+                .map(|s| (s.start, s.end, s.title()))
+                .collect();
             (song.duration, secs)
         };
         // Lines as little marks on the timeline.
@@ -888,7 +981,15 @@ impl QwertoneApp {
                     .collect()
             })
             .unwrap_or_default();
-        let tl = song_view::timeline(ui, &p, dur, self.song_ui.heard, &sections, self.song_ui.looping, &marks);
+        let tl = song_view::timeline(
+            ui,
+            &p,
+            dur,
+            self.song_ui.heard,
+            &sections,
+            self.song_ui.looping,
+            &marks,
+        );
         if let Some(t) = tl.seek {
             self.song_seek(t);
         }
@@ -913,20 +1014,33 @@ impl QwertoneApp {
             if ui.button("← Practice").clicked() {
                 self.lyrics_back_to_practice();
             }
-            let name = self.song_ui.song.as_ref().map(|s| s.display_name()).unwrap_or_default();
+            let name = self
+                .song_ui
+                .song
+                .as_ref()
+                .map(|s| s.display_name())
+                .unwrap_or_default();
             ui.label(RichText::new(name).size(19.0).strong().color(p.primary));
             ui.add_space(6.0);
             self.lyrics_layer_toggles(ui);
             ui.add_space(6.0);
             self.lyrics_badge(ui);
-            if self.song_ui.lyrics.doc.as_ref().is_some_and(|d| !d.lines.is_empty())
+            if self
+                .song_ui
+                .lyrics
+                .doc
+                .as_ref()
+                .is_some_and(|d| !d.lines.is_empty())
                 && ui.button("✎ Edit lyrics").clicked()
             {
                 self.lyrics_open_editor(false);
             }
             ui.label("Size");
             let mut s = self.cfg.lyrics.size;
-            if ui.add(egui::Slider::new(&mut s, 0.6..=1.6).show_value(false)).changed() {
+            if ui
+                .add(egui::Slider::new(&mut s, 0.6..=1.6).show_value(false))
+                .changed()
+            {
                 self.cfg.lyrics.size = s;
                 self.mark_dirty();
             }
@@ -952,7 +1066,13 @@ impl QwertoneApp {
         self.lyrics_sync_controls(ui, true);
         ui.add_space(6.0);
         let h = ui.available_height().max(200.0);
-        if self.song_ui.lyrics.doc.as_ref().is_some_and(|d| !d.lines.is_empty()) {
+        if self
+            .song_ui
+            .lyrics
+            .doc
+            .as_ref()
+            .is_some_and(|d| !d.lines.is_empty())
+        {
             self.lyrics_panel(ui, h);
         } else {
             self.lyrics_empty(ui);
@@ -1109,7 +1229,13 @@ impl QwertoneApp {
                 // An empty timed line: a short pause marker.
                 let g = painter.layout_no_wrap("♪".into(), FontId::proportional(small), p.outline);
                 let h = g.size().y;
-                blocks.push(Block { y, h, galleys: vec![g], start: None, doubtful: false });
+                blocks.push(Block {
+                    y,
+                    h,
+                    galleys: vec![g],
+                    start: None,
+                    doubtful: false,
+                });
                 y += h + gap;
                 continue;
             }
@@ -1157,11 +1283,23 @@ impl QwertoneApp {
                     } else {
                         color.gamma_multiply(0.85)
                     };
-                    galleys.push(painter.layout(text.to_string(), FontId::proportional(small), c, wrap));
+                    galleys.push(painter.layout(
+                        text.to_string(),
+                        FontId::proportional(small),
+                        c,
+                        wrap,
+                    ));
                 }
             }
-            let h = galleys.iter().map(|g| g.size().y).sum::<f32>() + 4.0 * (galleys.len() as f32 - 1.0);
-            blocks.push(Block { y, h, galleys, start: line.start, doubtful });
+            let h = galleys.iter().map(|g| g.size().y).sum::<f32>()
+                + 4.0 * (galleys.len() as f32 - 1.0);
+            blocks.push(Block {
+                y,
+                h,
+                galleys,
+                start: line.start,
+                doubtful,
+            });
             y += h + gap;
         }
         let total = y;
@@ -1170,7 +1308,11 @@ impl QwertoneApp {
         let lu = &mut self.song_ui.lyrics;
         let now = Instant::now();
         let hovered = resp.hovered() || ui.rect_contains_pointer(rect);
-        let wheel = if hovered { ui.input(|i| i.smooth_scroll_delta.y) } else { 0.0 };
+        let wheel = if hovered {
+            ui.input(|i| i.smooth_scroll_delta.y)
+        } else {
+            0.0
+        };
         if wheel != 0.0 {
             lu.scroll -= wheel;
             lu.paused_until = Some(now + Duration::from_secs(4));
@@ -1215,12 +1357,19 @@ impl QwertoneApp {
             if y0 > rect.bottom() || y0 + b.h < rect.top() {
                 continue;
             }
-            let row = Rect::from_min_size(pos2(rect.left() + 8.0, y0 - 6.0), vec2(width - 16.0, b.h + 12.0));
+            let row = Rect::from_min_size(
+                pos2(rect.left() + 8.0, y0 - 6.0),
+                vec2(width - 16.0, b.h + 12.0),
+            );
             if synced
                 && b.start.is_some()
                 && pointer.is_some_and(|pt| row.contains(pt) && rect.contains(pt))
             {
-                painter.rect_filled(row, egui::CornerRadius::same(12), p.surface_container.gamma_multiply(0.9));
+                painter.rect_filled(
+                    row,
+                    egui::CornerRadius::same(12),
+                    p.surface_container.gamma_multiply(0.9),
+                );
                 if resp.clicked() {
                     clicked = b.start;
                 }
@@ -1251,20 +1400,40 @@ impl QwertoneApp {
             chip_y += 34.0;
         }
         if let Some(m) = job_msg {
-            banner(&painter, pos2(rect.center().x, chip_y), &format!("Updating lyrics: {m}"), &p);
+            banner(
+                &painter,
+                pos2(rect.center().x, chip_y),
+                &format!("Updating lyrics: {m}"),
+                &p,
+            );
             ui.ctx().request_repaint_after(Duration::from_millis(250));
         }
         let paused = !following && synced;
         if paused {
-            let b = Rect::from_center_size(pos2(rect.center().x, rect.bottom() - 28.0), vec2(220.0, 32.0));
+            let b = Rect::from_center_size(
+                pos2(rect.center().x, rect.bottom() - 28.0),
+                vec2(220.0, 32.0),
+            );
             let r = ui.interact(b, ui.scope_id().with("lyrics-back"), Sense::click());
-            painter.rect_filled(b, egui::CornerRadius::same(255), if r.hovered() { p.primary } else { p.secondary_container });
+            painter.rect_filled(
+                b,
+                egui::CornerRadius::same(255),
+                if r.hovered() {
+                    p.primary
+                } else {
+                    p.secondary_container
+                },
+            );
             painter.text(
                 b.center(),
                 Align2::CENTER_CENTER,
                 "↓ Back to the current line",
                 FontId::proportional(14.0),
-                if r.hovered() { p.on_primary } else { p.on_secondary_container },
+                if r.hovered() {
+                    p.on_primary
+                } else {
+                    p.on_secondary_container
+                },
             );
             if r.clicked() {
                 self.song_ui.lyrics.paused_until = None;
@@ -1283,7 +1452,12 @@ impl QwertoneApp {
     // ------------------------------------------------------------ editor
 
     /// Keys in the lyrics editor. Returns true if used.
-    pub(super) fn lyrics_editor_key(&mut self, k: KeyId, repeat: bool, mods: egui::Modifiers) -> bool {
+    pub(super) fn lyrics_editor_key(
+        &mut self,
+        k: KeyId,
+        repeat: bool,
+        mods: egui::Modifiers,
+    ) -> bool {
         let KeyId::Key(key) = k else {
             return false;
         };
@@ -1354,7 +1528,11 @@ impl QwertoneApp {
                 .lyrics
                 .confirm_discard
                 .is_some_and(|t| t.elapsed() < Duration::from_secs(3));
-            let back = if dirty && armed { "Discard changes?" } else { "← Lyrics" };
+            let back = if dirty && armed {
+                "Discard changes?"
+            } else {
+                "← Lyrics"
+            };
             if ui.button(back).clicked() {
                 if dirty && !armed {
                     self.song_ui.lyrics.confirm_discard = Some(Instant::now());
@@ -1365,22 +1543,43 @@ impl QwertoneApp {
                     return;
                 }
             }
-            ui.label(RichText::new("Edit lyrics").size(19.0).strong().color(p.primary));
+            ui.label(
+                RichText::new("Edit lyrics")
+                    .size(19.0)
+                    .strong()
+                    .color(p.primary),
+            );
             let save = egui::Button::new(RichText::new("💾 Save").color(p.on_primary).strong())
                 .fill(p.primary)
                 .corner_radius(egui::CornerRadius::same(255));
-            if ui.add_enabled(dirty, save).on_hover_text("Ctrl+S").clicked() {
+            if ui
+                .add_enabled(dirty, save)
+                .on_hover_text("Ctrl+S")
+                .clicked()
+            {
                 self.lyrics_save();
             }
             let ed = self.song_ui.lyrics.editor.as_mut().unwrap();
-            if ui.add_enabled(can_undo, egui::Button::new("↶ Undo")).on_hover_text("Ctrl+Z").clicked() {
+            if ui
+                .add_enabled(can_undo, egui::Button::new("↶ Undo"))
+                .on_hover_text("Ctrl+Z")
+                .clicked()
+            {
                 ed.undo();
             }
-            if ui.add_enabled(can_redo, egui::Button::new("↷ Redo")).on_hover_text("Ctrl+Shift+Z").clicked() {
+            if ui
+                .add_enabled(can_redo, egui::Button::new("↷ Redo"))
+                .on_hover_text("Ctrl+Shift+Z")
+                .clicked()
+            {
                 ed.redo();
             }
             ui.separator();
-            let label = if tapping.is_some() { "■ Stop tapping" } else { "👆 Tap along" };
+            let label = if tapping.is_some() {
+                "■ Stop tapping"
+            } else {
+                "👆 Tap along"
+            };
             if ui
                 .selectable_label(tapping.is_some(), label)
                 .on_hover_text("Play the song and press Space as each line starts")
@@ -1403,10 +1602,18 @@ impl QwertoneApp {
             }
             ui.separator();
             ui.label("Whole song");
-            if ui.small_button("−0.1 s").on_hover_text("Every line 0.1 s earlier").clicked() {
+            if ui
+                .small_button("−0.1 s")
+                .on_hover_text("Every line 0.1 s earlier")
+                .clicked()
+            {
                 ed.shift_all(-0.1);
             }
-            if ui.small_button("+0.1 s").on_hover_text("Every line 0.1 s later").clicked() {
+            if ui
+                .small_button("+0.1 s")
+                .on_hover_text("Every line 0.1 s later")
+                .clicked()
+            {
                 ed.shift_all(0.1);
             }
         });
@@ -1457,7 +1664,8 @@ impl QwertoneApp {
                     let is_sel = ed.selected == i;
                     let is_tap = ed.tapping == Some(i);
                     let fill = if is_tap {
-                        p.tertiary_container.gamma_multiply(0.6 + 0.4 * flash.unwrap_or(0.0))
+                        p.tertiary_container
+                            .gamma_multiply(0.6 + 0.4 * flash.unwrap_or(0.0))
                     } else if is_sel {
                         p.secondary_container
                     } else if is_cur {
@@ -1471,12 +1679,28 @@ impl QwertoneApp {
                         .inner_margin(egui::Margin::symmetric(8, 4))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                let mark = if is_tap { "▶" } else if is_cur { "♪" } else { " " };
+                                let mark = if is_tap {
+                                    "▶"
+                                } else if is_cur {
+                                    "♪"
+                                } else {
+                                    " "
+                                };
                                 ui.label(RichText::new(mark).monospace().color(p.primary));
-                                let time = line.start.map(fmt_cs).unwrap_or_else(|| "–:––.––".into());
-                                let tc = if ed.timed.get(i).copied().unwrap_or(false) { p.tertiary } else { p.on_surface };
+                                let time =
+                                    line.start.map(fmt_cs).unwrap_or_else(|| "–:––.––".into());
+                                let tc = if ed.timed.get(i).copied().unwrap_or(false) {
+                                    p.tertiary
+                                } else {
+                                    p.on_surface
+                                };
                                 let r = ui
-                                    .add(egui::Button::new(RichText::new(time).monospace().color(tc)).frame(false))
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new(time).monospace().color(tc),
+                                        )
+                                        .frame(false),
+                                    )
                                     .on_hover_text("Select; double-click to play from here");
                                 if r.double_clicked() {
                                     if let Some(s) = line.start {
@@ -1485,7 +1709,11 @@ impl QwertoneApp {
                                 } else if r.clicked() {
                                     select = Some(i);
                                 }
-                                if ui.small_button("−").on_hover_text("50 ms earlier").clicked() {
+                                if ui
+                                    .small_button("−")
+                                    .on_hover_text("50 ms earlier")
+                                    .clicked()
+                                {
                                     nudge = Some((i, -0.05));
                                 }
                                 if ui.small_button("+").on_hover_text("50 ms later").clicked() {
@@ -1514,18 +1742,34 @@ impl QwertoneApp {
                                     ui.label(RichText::new("?").color(p.tertiary))
                                         .on_hover_text("The model wasn't sure about this line");
                                 }
-                                if ui.small_button("＋").on_hover_text("Add a line after this one").clicked() {
+                                if ui
+                                    .small_button("＋")
+                                    .on_hover_text("Add a line after this one")
+                                    .clicked()
+                                {
                                     insert = Some(i);
                                 }
-                                if ui.small_button("🗑").on_hover_text("Delete this line").clicked() {
+                                if ui
+                                    .small_button("🗑")
+                                    .on_hover_text("Delete this line")
+                                    .clicked()
+                                {
                                     remove = Some(i);
                                 }
                             });
                             if let Some(r) = line.romanized.as_ref().filter(|r| **r != line.text) {
-                                ui.label(RichText::new(format!("      {r}")).small().color(p.on_surface_variant));
+                                ui.label(
+                                    RichText::new(format!("      {r}"))
+                                        .small()
+                                        .color(p.on_surface_variant),
+                                );
                             }
                             if let Some(tr) = &line.translation {
-                                ui.label(RichText::new(format!("      = {tr}")).small().color(p.outline));
+                                ui.label(
+                                    RichText::new(format!("      = {tr}"))
+                                        .small()
+                                        .color(p.outline),
+                                );
                             }
                         });
                 }
@@ -1628,7 +1872,12 @@ fn source_row(ui: &mut egui::Ui, p: &Palette, s: &crate::song::lyrics::Source) {
             ui.label(RichText::new(d).small().color(p.outline));
         }
         if s.machine_translation() {
-            chip(ui, p.tertiary_container, p.on_surface, "machine translation");
+            chip(
+                ui,
+                p.tertiary_container,
+                p.on_surface,
+                "machine translation",
+            );
         } else if s.auto_generated() {
             chip(ui, p.tertiary_container, p.on_surface, "auto-generated");
         }
@@ -1637,7 +1886,12 @@ fn source_row(ui: &mut egui::Ui, p: &Palette, s: &crate::song::lyrics::Source) {
         }
     });
     if let Some(f) = &s.file {
-        ui.label(RichText::new(f).small().monospace().color(p.on_surface_variant));
+        ui.label(
+            RichText::new(f)
+                .small()
+                .monospace()
+                .color(p.on_surface_variant),
+        );
     }
     let mut extra = Vec::new();
     for k in ["model", "library", "style"] {
@@ -1662,7 +1916,11 @@ fn banner(painter: &egui::Painter, center_top: Pos2, text: &str, p: &Palette) {
         pos2(center_top.x, center_top.y + g.size().y / 2.0 + 6.0),
         g.size() + vec2(28.0, 12.0),
     );
-    painter.rect_filled(r, egui::CornerRadius::same(255), p.surface_container_highest);
+    painter.rect_filled(
+        r,
+        egui::CornerRadius::same(255),
+        p.surface_container_highest,
+    );
     painter.galley(r.min + vec2(14.0, 6.0), g, p.on_surface);
 }
 
@@ -1674,7 +1932,10 @@ fn fade(painter: &egui::Painter, rect: Rect, bg: Color32) {
         let a = 1.0 - k as f32 / steps as f32;
         let c = bg.gamma_multiply(a * a);
         let y = k as f32 * h / steps as f32;
-        let top = Rect::from_min_size(pos2(rect.left(), rect.top() + y), vec2(rect.width(), h / steps as f32 + 0.5));
+        let top = Rect::from_min_size(
+            pos2(rect.left(), rect.top() + y),
+            vec2(rect.width(), h / steps as f32 + 0.5),
+        );
         let bot = Rect::from_min_size(
             pos2(rect.left(), rect.bottom() - y - h / steps as f32),
             vec2(rect.width(), h / steps as f32 + 0.5),
@@ -1740,7 +2001,11 @@ fn parse_pasted(text: &str, lang: &str) -> Lyrics {
         }
     }
     if timed {
-        doc.lines.sort_by(|a, b| a.start.unwrap_or(f64::MAX).total_cmp(&b.start.unwrap_or(f64::MAX)));
+        doc.lines.sort_by(|a, b| {
+            a.start
+                .unwrap_or(f64::MAX)
+                .total_cmp(&b.start.unwrap_or(f64::MAX))
+        });
         let starts: Vec<Option<f64>> = doc.lines.iter().map(|l| l.start).collect();
         for (k, l) in doc.lines.iter_mut().enumerate() {
             if l.start.is_some() {
@@ -1771,7 +2036,10 @@ mod tests {
 
     #[test]
     fn pasted_lrc_and_plain() {
-        let d = parse_pasted("[ti:x]\n[00:01.50]ஒன்று\n[00:03.00][00:10.00]இரண்டு <00:03.50>மூன்று\n\n", "ta");
+        let d = parse_pasted(
+            "[ti:x]\n[00:01.50]ஒன்று\n[00:03.00][00:10.00]இரண்டு <00:03.50>மூன்று\n\n",
+            "ta",
+        );
         assert_eq!(d.lines.len(), 3);
         assert_eq!(d.lines[0].start, Some(1.5));
         assert_eq!(d.lines[1].text, "இரண்டு மூன்று");
@@ -1788,11 +2056,13 @@ mod tests {
 
     #[test]
     fn toggle_labels() {
-        let d = Lyrics::from_json(r#"{"language": "te", "languages": ["te", "en"], "lines": []}"#).unwrap();
+        let d = Lyrics::from_json(r#"{"language": "te", "languages": ["te", "en"], "lines": []}"#)
+            .unwrap();
         let (n, r, e) = layer_labels(&d);
         assert_eq!((n.as_str(), r.as_str()), ("తెలుగు", "Tenglish"));
         assert!(e.contains("machine"));
-        let d = Lyrics::from_json(r#"{"language": "hi", "languages": ["hi", "ta"], "lines": []}"#).unwrap();
+        let d = Lyrics::from_json(r#"{"language": "hi", "languages": ["hi", "ta"], "lines": []}"#)
+            .unwrap();
         assert_eq!(layer_labels(&d).0, "Original script");
     }
 }

@@ -205,12 +205,16 @@ impl Line {
 
     /// `ta-Latn` & co: the romanised text *is* the text.
     pub fn is_romanised_language(&self) -> bool {
-        self.language.as_deref().is_some_and(|l| l.ends_with("-Latn"))
+        self.language
+            .as_deref()
+            .is_some_and(|l| l.ends_with("-Latn"))
             || self.romanized.as_deref() == Some(self.text.as_str())
     }
 
     pub fn is_english(&self) -> bool {
-        self.language.as_deref().is_some_and(|l| l == "en" || l.starts_with("en-"))
+        self.language
+            .as_deref()
+            .is_some_and(|l| l == "en" || l.starts_with("en-"))
     }
 
     /// Words with timing, if any.
@@ -283,7 +287,8 @@ pub struct Position {
 pub type WordAt = Option<(usize, f32)>;
 
 pub fn is_latin(s: &str) -> bool {
-    s.chars().all(|c| c.is_ascii() || !c.is_alphabetic() || (c as u32) < 0x0370)
+    s.chars()
+        .all(|c| c.is_ascii() || !c.is_alphabetic() || (c as u32) < 0x0370)
 }
 
 impl Lyrics {
@@ -294,8 +299,7 @@ impl Lyrics {
         if !p.exists() {
             return Ok(None);
         }
-        let text =
-            std::fs::read_to_string(&p).map_err(|e| format!("couldn't read {FILE}: {e}"))?;
+        let text = std::fs::read_to_string(&p).map_err(|e| format!("couldn't read {FILE}: {e}"))?;
         Lyrics::from_json(&text).map(Some)
     }
 
@@ -336,8 +340,11 @@ impl Lyrics {
         }
         if self.synced() {
             // Stable: equal times keep their order (repeated choruses).
-            self.lines
-                .sort_by(|a, b| a.start.unwrap_or(f64::MAX).total_cmp(&b.start.unwrap_or(f64::MAX)));
+            self.lines.sort_by(|a, b| {
+                a.start
+                    .unwrap_or(f64::MAX)
+                    .total_cmp(&b.start.unwrap_or(f64::MAX))
+            });
         }
     }
 
@@ -422,10 +429,13 @@ impl Lyrics {
             .lines
             .partition_point(|l| l.start.is_some_and(|s| s <= t + 1e-9));
         let line = n.checked_sub(1);
-        let next = (n..self.lines.len()).find(|&i| self.lines[i].start.is_some() && !self.lines[i].is_blank());
+        let next = (n..self.lines.len())
+            .find(|&i| self.lines[i].start.is_some() && !self.lines[i].is_blank());
         let active = line.is_some_and(|i| {
             let l = &self.lines[i];
-            !l.is_blank() && l.end.is_none_or(|e| t < e) && next.is_none_or(|j| self.lines[j].start.unwrap_or(f64::MAX) > t)
+            !l.is_blank()
+                && l.end.is_none_or(|e| t < e)
+                && next.is_none_or(|j| self.lines[j].start.unwrap_or(f64::MAX) > t)
         });
         Position { line, active, next }
     }
@@ -446,8 +456,11 @@ impl Lyrics {
 
     /// The source of `layer` for line `i` (its own override, else the song's).
     pub fn source(&self, i: Option<usize>, what: SourceOf) -> Option<&Source> {
-        let line = i.and_then(|i| self.lines.get(i)).and_then(|l| l.sources.as_ref());
-        line.and_then(|s| s.get(what)).or_else(|| self.sources.get(what))
+        let line = i
+            .and_then(|i| self.lines.get(i))
+            .and_then(|l| l.sources.as_ref());
+        line.and_then(|s| s.get(what))
+            .or_else(|| self.sources.get(what))
     }
 
     /// Times to the millisecond (no 1.9000000000000001 in the file).
@@ -555,7 +568,11 @@ impl Lyrics {
         }
         doc.has_word_timing = doc.has_words();
         doc.status = if doc.lines.iter().all(|l| l.is_blank()) {
-            if doc.instrumental() { "instrumental".into() } else { "not_found".into() }
+            if doc.instrumental() {
+                "instrumental".into()
+            } else {
+                "not_found".into()
+            }
         } else if doc.synced() {
             "synced".into()
         } else {
@@ -570,13 +587,24 @@ impl Lyrics {
         write_atomic(&path, json.as_bytes())?;
 
         let idir = dir.join(IMPORT_DIR);
-        std::fs::create_dir_all(&idir).map_err(|e| format!("couldn't make {}: {e}", idir.display()))?;
-        write_atomic(&idir.join(IMPORT_LRC), self.to_lrc(title, artist).as_bytes())?;
+        std::fs::create_dir_all(&idir)
+            .map_err(|e| format!("couldn't make {}: {e}", idir.display()))?;
+        write_atomic(
+            &idir.join(IMPORT_LRC),
+            self.to_lrc(title, artist).as_bytes(),
+        )?;
         let mut based = Map::new();
-        for (k, s) in [("words", &self.sources.words), ("timing", &self.sources.timing)] {
+        for (k, s) in [
+            ("words", &self.sources.words),
+            ("timing", &self.sources.timing),
+        ] {
             if let Some(s) = s {
                 // Don't nest edits inside edits.
-                let s = if s.is_user() { s.based_on().unwrap_or(s.clone()) } else { s.clone() };
+                let s = if s.is_user() {
+                    s.based_on().unwrap_or(s.clone())
+                } else {
+                    s.clone()
+                };
                 based.insert(k.into(), serde_json::to_value(s).unwrap_or(Value::Null));
             }
         }
@@ -624,7 +652,11 @@ impl Lyrics {
         Lyrics {
             format: "qwertone-lyrics".into(),
             format_version: 1,
-            status: if lines.is_empty() { "not_found".into() } else { "plain".into() },
+            status: if lines.is_empty() {
+                "not_found".into()
+            } else {
+                "plain".into()
+            },
             language: language.map(|s| s.to_string()),
             languages: language.map(|s| vec![s.to_string()]).unwrap_or_default(),
             sources: Sources {
@@ -671,7 +703,12 @@ fn one_line(s: &str) -> String {
 
 fn lrc_time(t: f64, open: char, close: char) -> String {
     let cs = (t.max(0.0) * 100.0).round() as u64;
-    format!("{open}{:02}:{:02}.{:02}{close}", cs / 6000, cs / 100 % 60, cs % 100)
+    format!(
+        "{open}{:02}:{:02}.{:02}{close}",
+        cs / 6000,
+        cs / 100 % 60,
+        cs % 100
+    )
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -822,7 +859,9 @@ impl LyricsEditor {
             }
         }
         // End: keep the length, but never past the next line.
-        let next = lines[i + 1..].iter().find_map(|l| l.start.filter(|s| *s > t));
+        let next = lines[i + 1..]
+            .iter()
+            .find_map(|l| l.start.filter(|s| *s > t));
         let len = match (old, lines[i].end) {
             (Some(o), Some(e)) => (e - o).max(0.0),
             _ => f64::INFINITY,
@@ -918,7 +957,9 @@ impl LyricsEditor {
     /// Change a line's text. Its romanised / English text are now stale
     /// (null until the analyzer runs again) and word timing is dropped.
     pub fn set_text(&mut self, i: usize, text: &str) {
-        let Some(l) = self.doc.lines.get(i) else { return };
+        let Some(l) = self.doc.lines.get(i) else {
+            return;
+        };
         if l.text == text {
             return;
         }
@@ -954,7 +995,12 @@ impl LyricsEditor {
         {
             let e = p.end.unwrap_or(s + 2.0);
             l.start = Some(e);
-            l.end = self.doc.lines.get(at).and_then(|n| n.start).or(Some(e + 2.0));
+            l.end = self
+                .doc
+                .lines
+                .get(at)
+                .and_then(|n| n.start)
+                .or(Some(e + 2.0));
         }
         self.doc.lines.insert(at, l);
         self.timed.insert(at, true);
@@ -1080,7 +1126,12 @@ impl LyricsEditor {
         let starts: Vec<Option<f64>> = doc.lines.iter().map(|l| l.start).collect();
         for (k, l) in doc.lines.iter_mut().enumerate() {
             if l.start.is_some() && l.end.is_none() {
-                l.end = starts[k + 1..].iter().flatten().next().copied().or(Some(self.duration));
+                l.end = starts[k + 1..]
+                    .iter()
+                    .flatten()
+                    .next()
+                    .copied()
+                    .or(Some(self.duration));
             }
         }
         doc.fix_beats(grid);
@@ -1139,7 +1190,13 @@ mod tests {
         assert_eq!(l.language.as_deref(), Some("ta"));
         assert!(l.synced() && l.fully_synced() && l.has_words());
         assert_eq!(l.sources.words.as_ref().unwrap().name, "LRCLIB");
-        assert!(l.sources.translation.as_ref().unwrap().machine_translation());
+        assert!(
+            l.sources
+                .translation
+                .as_ref()
+                .unwrap()
+                .machine_translation()
+        );
         assert_eq!(
             l.sources.words.as_ref().unwrap().fetched_date().as_deref(),
             Some("26 Nov 2026")
@@ -1163,7 +1220,14 @@ mod tests {
     #[test]
     fn current_line_and_gaps() {
         let l = doc();
-        assert_eq!(l.position(1.0), Position { line: None, active: false, next: Some(0) });
+        assert_eq!(
+            l.position(1.0),
+            Position {
+                line: None,
+                active: false,
+                next: Some(0)
+            }
+        );
         let p = l.position(3.0);
         assert_eq!((p.line, p.active, p.next), (Some(0), true, Some(1)));
         // 5.5–8.0 is a gap: the first line is over, the second is next.
@@ -1191,9 +1255,17 @@ mod tests {
         let l = doc();
         assert_eq!(
             l.available(),
-            Layers { native: true, romanized: true, english: true }
+            Layers {
+                native: true,
+                romanized: true,
+                english: true
+            }
         );
-        let all = Layers { native: true, romanized: true, english: true };
+        let all = Layers {
+            native: true,
+            romanized: true,
+            english: true,
+        };
         let t: Vec<_> = l.texts(&l.lines[0], all).into_iter().map(|x| x.0).collect();
         assert_eq!(t, [Layer::Native, Layer::Romanized, Layer::English]);
         // English line: shown once.
@@ -1201,15 +1273,36 @@ mod tests {
         // Tanglish line: text = romanised, no translation.
         assert_eq!(l.texts(&l.lines[2], all), [(Layer::Native, "nee enakku")]);
         // Only romanised: Tamil line in Tanglish, English line as is.
-        let rom = Layers { native: false, romanized: true, english: false };
-        assert_eq!(l.texts(&l.lines[0], rom), [(Layer::Romanized, "kaalai thendral vandhadhu")]);
-        assert_eq!(l.texts(&l.lines[1], rom), [(Layer::Romanized, "I love you")]);
+        let rom = Layers {
+            native: false,
+            romanized: true,
+            english: false,
+        };
+        assert_eq!(
+            l.texts(&l.lines[0], rom),
+            [(Layer::Romanized, "kaalai thendral vandhadhu")]
+        );
+        assert_eq!(
+            l.texts(&l.lines[1], rom),
+            [(Layer::Romanized, "I love you")]
+        );
         // Only English.
-        let en = Layers { native: false, romanized: false, english: true };
-        assert_eq!(l.texts(&l.lines[0], en), [(Layer::English, "The morning breeze came")]);
+        let en = Layers {
+            native: false,
+            romanized: false,
+            english: true,
+        };
+        assert_eq!(
+            l.texts(&l.lines[0], en),
+            [(Layer::English, "The morning breeze came")]
+        );
         assert_eq!(l.texts(&l.lines[1], en), [(Layer::English, "I love you")]);
         // Nothing on: still shows the text.
-        let none = Layers { native: false, romanized: false, english: false };
+        let none = Layers {
+            native: false,
+            romanized: false,
+            english: false,
+        };
         assert_eq!(l.texts(&l.lines[0], none).len(), 1);
     }
 
@@ -1220,15 +1313,33 @@ mod tests {
             r#"{"lines": [{"start": 1.0, "text": "hello there", "language": "en"}]}"#,
         )
         .unwrap();
-        assert_eq!(l.available(), Layers { native: false, romanized: false, english: false });
+        assert_eq!(
+            l.available(),
+            Layers {
+                native: false,
+                romanized: false,
+                english: false
+            }
+        );
         // Hindi without translation.
         let l = Lyrics::from_json(
             r#"{"lines": [{"start": 1.0, "text": "दिल", "language": "hi", "romanized": "dil", "translation": null}]}"#,
         )
         .unwrap();
-        assert_eq!(l.available(), Layers { native: true, romanized: true, english: false });
+        assert_eq!(
+            l.available(),
+            Layers {
+                native: true,
+                romanized: true,
+                english: false
+            }
+        );
         // With "native" off and no romanised wanted, the script still shows.
-        let want = Layers { native: false, romanized: false, english: true };
+        let want = Layers {
+            native: false,
+            romanized: false,
+            english: true,
+        };
         assert_eq!(l.texts(&l.lines[0], want), [(Layer::Native, "दिल")]);
     }
 
@@ -1247,8 +1358,9 @@ mod tests {
 
     #[test]
     fn plain_lyrics_have_no_position() {
-        let l = Lyrics::from_json(r#"{"status": "plain", "lines": [{"text": "a"}, {"text": "b"}]}"#)
-            .unwrap();
+        let l =
+            Lyrics::from_json(r#"{"status": "plain", "lines": [{"text": "a"}, {"text": "b"}]}"#)
+                .unwrap();
         assert!(!l.synced());
         assert_eq!(l.position(5.0).line, None);
         assert_eq!(l.position(5.0).next, None);
@@ -1365,7 +1477,10 @@ mod tests {
         assert!(d.lines[1].sources.is_none());
         // A Tanglish line keeps romanised = text.
         e.set_text(2, "nee enakku venum");
-        assert_eq!(e.doc.lines[2].romanized.as_deref(), Some("nee enakku venum"));
+        assert_eq!(
+            e.doc.lines[2].romanized.as_deref(),
+            Some("nee enakku venum")
+        );
         // Typing into a line is one undo step per line.
         e.undo();
         assert_eq!(e.doc.lines[2].text, "nee enakku");
@@ -1398,13 +1513,23 @@ mod tests {
         e.finish(&grid()).save(&dir, "Kaalai", None).unwrap();
         let back = Lyrics::load(&dir).unwrap().unwrap();
         assert_eq!(back.lines[1].start, Some(7.75));
-        assert!(back.lines[1].sources.as_ref().unwrap().timing.as_ref().unwrap().is_user());
+        assert!(
+            back.lines[1]
+                .sources
+                .as_ref()
+                .unwrap()
+                .timing
+                .as_ref()
+                .unwrap()
+                .is_user()
+        );
         assert!(dir.join("lyrics.json.bak").exists());
         let lrc = std::fs::read_to_string(dir.join("lyrics/imported.lrc")).unwrap();
         assert!(lrc.contains("[00:07.75]I love you"));
-        let meta: Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.join("lyrics/imported.json")).unwrap())
-                .unwrap();
+        let meta: Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("lyrics/imported.json")).unwrap(),
+        )
+        .unwrap();
         assert_eq!(meta["editor"], "qwertone");
         assert_eq!(meta["based_on"]["words"]["name"], "LRCLIB");
         assert!(Lyrics::forget_edit(&dir));

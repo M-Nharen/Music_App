@@ -53,7 +53,10 @@ pub fn parse_line(line: &str) -> Event {
         Some("error") => Event::Error(s("message")),
         Some("lyrics") => Event::Lyrics {
             status: s("status"),
-            language: v.get("language").and_then(|x| x.as_str()).map(|x| x.to_string()),
+            language: v
+                .get("language")
+                .and_then(|x| x.as_str())
+                .map(|x| x.to_string()),
         },
         _ => Event::Log(line.to_string()),
     }
@@ -237,7 +240,14 @@ impl Job {
             "--json-progress".into(),
         ];
         args.extend(extra.iter().map(|s| s.to_string()));
-        Job::spawn(program, args, song_dir, Options::default(), vec!["lyrics"], Some(song_dir.to_path_buf()))
+        Job::spawn(
+            program,
+            args,
+            song_dir,
+            Options::default(),
+            vec!["lyrics"],
+            Some(song_dir.to_path_buf()),
+        )
     }
 
     /// `qwertone-analyze import-lrc <file> <song dir> --json-progress`.
@@ -248,7 +258,14 @@ impl Job {
             song_dir.display().to_string(),
             "--json-progress".into(),
         ];
-        Job::spawn(program, args, song_dir, Options::default(), vec!["lyrics"], Some(song_dir.to_path_buf()))
+        Job::spawn(
+            program,
+            args,
+            song_dir,
+            Options::default(),
+            vec!["lyrics"],
+            Some(song_dir.to_path_buf()),
+        )
     }
 
     fn spawn(
