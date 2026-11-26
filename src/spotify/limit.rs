@@ -209,7 +209,7 @@ pub fn fmt_wait(d: Duration) -> String {
         format!("{} min", s.div_ceil(60))
     } else {
         let m = s.div_ceil(60);
-        if m % 60 == 0 {
+        if m.is_multiple_of(60) {
             format!("{} h", m / 60)
         } else {
             format!("{} h {} min", m / 60, m % 60)

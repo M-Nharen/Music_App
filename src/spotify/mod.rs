@@ -34,6 +34,8 @@ pub enum Req {
     /// Use these credentials (after login, or loaded at start).
     SetLogin(Box<Tokens>, String),
     Logout,
+    /// Where to keep the login from now on ("auto", "keyring", "file").
+    StorePref(String),
     Search(String),
     /// Ask for the playback state (`GET /me/player`).
     Poll,
@@ -65,7 +67,7 @@ pub enum Ev {
     },
     /// `None` = nothing playing (204).
     Playback {
-        pb: Option<Playback>,
+        pb: Option<Box<Playback>>,
         sent: Instant,
         received: Instant,
     },
@@ -250,6 +252,15 @@ impl Worker {
                 self.tokens = Some(*t);
                 self.store_pref = pref;
             }
+            Req::StorePref(p) => {
+                self.store_pref = p;
+                // Move the current login there now.
+                if let Some(t) = &self.tokens {
+                    store::clear();
+                    let saved = store::save(&self.store_pref, t);
+                    self.emit(Ev::Saved(saved));
+                }
+            }
             Req::Logout => {
                 self.tokens = None;
                 store::clear();
@@ -271,6 +282,7 @@ impl Worker {
                         serde_json::from_str(&a.body)
                             .ok()
                             .and_then(|v| Playback::from_json(&v))
+                            .map(Box::new)
                     };
                     self.emit(Ev::Playback { pb, sent, received });
                 }

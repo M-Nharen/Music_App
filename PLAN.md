@@ -31,7 +31,7 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 5 | Song mode from analyzer song folders and MIDI files: falling notes labelled with keyboard keys, chord sheet, wait mode, loop + slow down, scoring, one-key mode, auto song layout, Bluetooth-synced visuals and scoring, analyzer started from the app with a progress bar | **done** (branch `part-5-songs`, which also has Part 6 merged in) |
 | 6 | Python pipeline: Demucs stems → extraction modes (chords only / melody only via CREPE / chords+melody / full via Basic Pitch / single instrument incl. piano model + drums / simplified) + confidence highlighting + note editor. Live listen mode | **done** (analyzer on branch `part-6-analyzer`; the note editor and live listen mode were built in Rust in `part-5-songs`) |
 | 7 | Jam mode: stem mixer with your part muted, time-stretch, Bluetooth delay compensation of backing + visuals | **done** (branch `part-7-jam`, which also has 10a-lite + 10a-full merged in) |
-| 8 | Spotify: PKCE login, search, remote control, now-playing → open practice version, sync mode | |
+| 8 | Spotify: PKCE login, search, remote control, now-playing → open practice version, sync mode | **done** (branch `part-8-spotify`, from `part-10b-lyrics`) |
 | 9 | Polish: themes, stats, streaks, more lessons | |
 | 10a-lite | Lyrics engine, small (analyzer/ only): `.lrc` + embedded tags + LRCLIB synced lyrics, Tanglish transliteration, `lyrics.json` with source info for words / timing / translation | **done** (branch `part-10a-lyrics`) |
 | 10b | Lyrics in the app: Spotify-style Lyrics screen, current line inside the falling-notes area (toggle, top/bottom), source badge, lyrics editor, tap-along timing, Bluetooth offset + manual nudge | **done** (branch `part-10b-lyrics`, from `part-7-jam`) |
@@ -48,8 +48,8 @@ Each part starts from the newest branch (it contains everything before it). Don'
 | 2 | 10a-full lyrics engine (**done**) | `part-10a-lyrics` | `part-10a-full` | — (only edits `analyzer/`) |
 | 3 | 7 Jam mode (**done**) | `part-4b-loop` (merged `part-10a-full` first) | `part-7-jam` | — |
 | 4 | 10b lyrics in the app (**done**) | `part-7-jam` | `part-10b-lyrics` | — |
-| 5 | 8 Spotify (also: sync lyrics with Spotify playback) | latest | `part-8-spotify` | — |
-| 6 | 9 Polish, then merge everything into `main` | latest | `main` | — |
+| 5 | 8 Spotify (also: sync lyrics with Spotify playback) (**done**) | `part-10b-lyrics` | `part-8-spotify` | — |
+| 6 | 9 Polish, then merge everything into `main` | `part-8-spotify` | `main` | — |
 
 ### Lyrics notes (Part 10)
 
@@ -61,7 +61,7 @@ Each part starts from the newest branch (it contains everything before it). Don'
   (`language`, `languages`) and per line (`lines[].language`, for songs that
   mix e.g. Hindi + English). Whisper detects the song language from the
   singing; `--language` (`--lyrics-language` on `analyze`) overrides it.
-- Three toggles per line: **native script** (`text`), **romanised**
+- Three toggles per line (default since Part 8: **romanised only**): **native script** (`text`), **romanised**
   (`romanized`: Tanglish / Tenglish / Hinglish …, one library — Aksharamukha
   — for every Indian script), **English** (`translation`, offline machine
   translation from any language, labelled as such).
@@ -76,6 +76,123 @@ Each part starts from the newest branch (it contains everything before it). Don'
   latency offset as Song mode (`visual_delay_ms()`, see Part 7's "line up").
 
 ## Notes for the next session
+
+### From Part 8 (Spotify)
+
+- **Branch:** `part-8-spotify` = `part-10b-lyrics` + Part 8. Part 9 starts here.
+- **Code:** logic in `src/spotify/` (no egui, tested): `auth.rs` (PKCE:
+  verifier / S256 challenge / state, authorize + token request bodies, the
+  one-shot loopback callback server on `127.0.0.1:<redirect_port>/callback`,
+  `Tokens` with a Debug that never prints them), `store.rs` (login kept in the
+  Secret Service via `secret-tool` — secret on stdin, attributes
+  `application qwertone service spotify` — else
+  `~/.local/share/qwertone/spotify-login.json` 0600 in a 0700 folder,
+  atomic; `token_store` = auto / keyring / file, changing it moves the login
+  at once; `config.toml` only has the Client ID), `limit.rs` (the `Limiter`), `sync.rs` (`Estimate` + `Poller`),
+  `api.rs` (Track / Device / Playback JSON), `cache.rs` (searches 7 days,
+  tracks; `~/.cache/qwertone/spotify.json`), `matching.rs` (title / artist /
+  length scoring vs analysed songs, file-name scoring for `~/Music` +
+  `~/Downloads`), `lyrics.rs` (lookup for any track), `mod.rs` (the worker
+  thread + `Login`). UI: `src/ui/app/spotify_tab.rs` (tab, now playing,
+  search, Learn this, lyrics card, settings, sync bar + `spotify_sync_tick`).
+  Config `[spotify]` (`SpotifySettings`: `client_id`, `redirect_port` 8898,
+  `token_store`, `poll_secs` 12, `offset_ms`, `links` track id →
+  `SpotifyLink { song, offset_ms, title }`).
+- **Development Mode (checked Nov 2026):** since Feb/Mar 2026 dev-mode apps
+  need the owner on Premium, ≤ 5 users (User Management), one dev-mode app
+  per account until July 2026 (then 25, sharing one quota per developer),
+  and only some endpoints. Used here, all still allowed: `GET /search`
+  (**limit ≤ 10**), `GET /me/player`, `PUT /me/player/{play,pause,seek}`,
+  `GET /me/player/devices`, `PUT /me/player` (transfer). Not used: `GET
+  /tracks` (several; removed), audio features / analysis (gone), anything
+  playlist-related. Track `popularity` / `available_markets` are gone;
+  `external_ids` (ISRC) is back and parsed but not relied on. Quota answer:
+  429 with `{"error": {"reason": "QUOTA_EXCEEDED"}}`. Redirect URIs must be
+  loopback IP literals (`localhost` is refused), http allowed for those.
+- **Call budget:** one worker thread, one call at a time; queued requests
+  merge (polls → one, after controls; searches / seeks → the last). Polls
+  only while the Spotify tab or sync mode (Song tab, Practice / Lyrics view)
+  is on screen and the window isn't minimised: every `poll_secs` (10–60,
+  default 12; ×3 when nothing plays anywhere), + 0.9 s after our own play /
+  pause / seek / transfer, + 1.5 s after the expected end of the track, never
+  closer than 2 s. Own ceiling 16 calls / rolling 30 s, polls stop at 11.
+  429: everything (including the token refresh) pauses for Retry-After (1 h
+  for `QUOTA_EXCEEDED` without one, 60 s otherwise), back-off doubles on
+  repeats (cap 6 h, a longer Retry-After is kept), never retried by itself.
+  Network / 5xx: 15 s doubling to 5 min ("Try again now" skips only these).
+  401 → one refresh, one retry; a refused refresh (`invalid_grant`) logs out.
+  Header chip "Spotify paused for N min" / "Spotify offline · retry in N s";
+  while paused the UI doesn't even queue calls (offline search over the
+  cache, controls say "use the Spotify app meanwhile", sync runs on the
+  estimate). The calls counter is in Spotify settings.
+- **Estimate:** `progress_ms` at the middle of the request's round trip, +
+  elapsed while playing, clamped to the track; our own controls update it at
+  once (optimistic until the check 0.9 s later).
+- **Sync mode** (`SpotifyUi.sync`, `syncing()`): opens the linked song and
+  drives the song's *own* clock from the estimate — Seek + Play / Pause when
+  Spotify's state differs, re-seek when > 120 ms off (≥ 500 ms apart, 300 ms
+  settle after any change), nothing when Spotify's version is longer than the
+  file and we're past its end. Everything else (falling notes, chord sheet,
+  overlay lyrics, scoring, Bluetooth line-up) is the normal Song-mode code.
+  While syncing: every part and the click are muted (`song_mute_mask` = all),
+  no stems (`jam_active` false), `song_wait()` = false, no count-in, speed and
+  loops refuse with a toast, the transport is replaced by the sync bar, and
+  `song_play_pause` / `song_seek` / `song_restart` go to Spotify (`*_local`
+  are the old bodies). Our clock = Spotify position + `spotify.offset_ms` +
+  the link's `offset_ms` (+ = notes earlier; the sync bar's "Notes − later /
+  + earlier" edits the link's). Easy parts with `transpose != 0` are swapped
+  for the original-key part (`song_prefer_original_key`). Spotify moving to
+  another track pauses the notes (or follows it if that track is linked and
+  the Song tab is open). Opening a song by hand stops following.
+  Bluetooth: Spotify on this computer goes through the same output, so the
+  line-up maths is unchanged; the Spotify-tab lyrics subtract
+  `output_delay_ms()` only when the device type is "Computer".
+- **Learn this:** link (`cfg.spotify.links`) → open (in sync if that track is
+  playing). Else analysed songs scored by `matching::score` (≥ 0.8 and
+  unique → linked automatically; ≥ 0.55 → "Is it one of these?"), audio files
+  by name, "Choose a file…" (zenity / kdialog / yad; MIDI or a song folder
+  links directly). Analysing goes through the Song tab's job
+  (`song_start_analysis`); when it finishes `spotify_on_analyzed` links it
+  and, if the song has no lyrics, re-runs `lyrics --title --artist --album
+  --force` with Spotify's metadata.
+- **Lyrics for any track:** a stand-in song folder
+  `~/.cache/qwertone/spotify/lyrics/<track id>/song.json` (metadata +
+  duration, `source.kind = "spotify"`, `sha256 = "spotify-<id>"`, no beats /
+  parts) + `qwertone-analyze lyrics <folder>` → LRCLIB, romanisation and
+  translation exactly as for songs (no analyzer change was needed; tests
+  `test_spotify_*` in `analyzer/tests/test_lyrics.py`). Without the
+  analyzer: LRCLIB `/get` then `/search` from Rust (closest length ≤ 3 s,
+  synced first), script-detected language, no romanisation. A miss is asked
+  again after 7 days. A linked song's own `lyrics.json` wins.
+- **Lyrics default:** romanised only (`native` and `english` off). Configs
+  from before Part 8 are moved once (`LyricsSettings::defaults_version`,
+  missing = 0 → `migrate()` on load); later choices are kept.
+- **Tests:** limiter (budget, Retry-After, quota, back-off, offline), poller
+  (only when visible, ~5 polls a minute, control / track-end polls without
+  bursts, waiting out a pause), estimate, PKCE (RFC 7636 vector), callback
+  parsing + the real one-shot server, token answers, private token file
+  (0600 / 0700), cache, matching, LRCLIB record picking, the stand-in folder,
+  and the worker against a fake Web API on localhost (429 + QUOTA_EXCEEDED
+  pauses every later call with no request; endpoints / query strings;
+  NO_ACTIVE_DEVICE). `QWERTONE_SPOTIFY_API=http://127.0.0.1:PORT/v1` points
+  the app at a fake API.
+- **Checked headless** (Xvfb, a fake Web API in Python): login card, the
+  login waiting + a bad callback's error, now playing with the estimate and
+  synced romanised lyrics, search, Learn this → sync mode in the Song tab,
+  Learn this on an unanalysed track finding `~/Music/<Artist> - <Title>.flac`,
+  the 429 chip + offline search, and the poll timing in the fake's log.
+  **Not checked against the real Spotify** (no account here): the real
+  login, real rate limits, and how sync feels with real playback (the ALSA
+  null device runs faster than real time, so the song's own clock can't be
+  judged headless).
+- **Ideas not done:** album art (needs image loading from i.scdn.co, not the
+  API); previous / next track (the endpoints exist but cost calls); a small
+  now-playing chip in the header (deliberately not: it would mean polling
+  everywhere); per-device latency for Spotify on phones / speakers;
+  detecting drift from Spotify's `timestamp` field; using ISRC to match
+  songs; following Spotify's queue to pre-load the next linked song;
+  moving the keyring lookup off the UI thread (a locked keyring's unlock
+  prompt blocks the window until answered).
 
 ### From Part 10b (lyrics in the app)
 

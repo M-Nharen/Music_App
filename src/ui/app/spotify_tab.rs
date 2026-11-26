@@ -336,7 +336,7 @@ impl QwertoneApp {
                         self.spotify.poller.idle = true;
                     }
                 }
-                self.spotify.pb = pb;
+                self.spotify.pb = pb.map(|b| *b);
                 let new_id = self.spotify.est.as_ref().and_then(|e| e.track_id.clone());
                 if new_id != old_id {
                     self.spotify_track_changed();
@@ -1914,13 +1914,19 @@ impl QwertoneApp {
                     }
                 });
                 let mut changed = false;
+                let mut moved = false;
                 ui.horizontal(|ui| {
                     ui.label("Keep the login in");
                     let s = &mut self.cfg.spotify.token_store;
                     for (v, l) in [("auto", "keyring if possible"), ("keyring", "keyring only"), ("file", "private file")] {
-                        changed |= ui.selectable_value(s, v.to_string(), l).changed();
+                        moved |= ui.selectable_value(s, v.to_string(), l).changed();
                     }
                 });
+                if moved {
+                    changed = true;
+                    let pref = self.cfg.spotify.token_store.clone();
+                    self.sp_send(Req::StorePref(pref));
+                }
                 ui.horizontal(|ui| {
                     ui.label("Check what's playing every");
                     changed |= ui
