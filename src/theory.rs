@@ -182,6 +182,138 @@ pub enum ChordRef {
     /// A fixed chord relative to the tonic (borrowed / secondary chords),
     /// e.g. bVII = root 10 semitones up, major.
     Fixed { root: u8, quality: Quality },
+    /// An exact chord by name, whatever the key: "G7", "F#m". Used by the
+    /// song layouts (Part 5), where each key plays one chord of the song.
+    Named { root: u8, kind: ChordKind },
+}
+
+/// Chord types a song's chord sheet uses (the analyzer's `quality` values).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ChordKind {
+    Major,
+    Minor,
+    Dom7,
+    Maj7,
+    Min7,
+    Dim,
+    Aug,
+    Sus2,
+    Sus4,
+}
+
+impl ChordKind {
+    pub const ALL: [ChordKind; 9] = [
+        ChordKind::Major,
+        ChordKind::Minor,
+        ChordKind::Dom7,
+        ChordKind::Maj7,
+        ChordKind::Min7,
+        ChordKind::Dim,
+        ChordKind::Aug,
+        ChordKind::Sus2,
+        ChordKind::Sus4,
+    ];
+
+    /// Semitones above the root.
+    pub fn intervals(self) -> &'static [i32] {
+        match self {
+            ChordKind::Major => &[0, 4, 7],
+            ChordKind::Minor => &[0, 3, 7],
+            ChordKind::Dom7 => &[0, 4, 7, 10],
+            ChordKind::Maj7 => &[0, 4, 7, 11],
+            ChordKind::Min7 => &[0, 3, 7, 10],
+            ChordKind::Dim => &[0, 3, 6],
+            ChordKind::Aug => &[0, 4, 8],
+            ChordKind::Sus2 => &[0, 2, 7],
+            ChordKind::Sus4 => &[0, 5, 7],
+        }
+    }
+
+    /// Name suffix: "", "m", "7", "maj7", "m7", "dim", "aug", "sus2", "sus4".
+    pub fn suffix(self) -> &'static str {
+        match self {
+            ChordKind::Major => "",
+            ChordKind::Minor => "m",
+            ChordKind::Dom7 => "7",
+            ChordKind::Maj7 => "maj7",
+            ChordKind::Min7 => "m7",
+            ChordKind::Dim => "dim",
+            ChordKind::Aug => "aug",
+            ChordKind::Sus2 => "sus2",
+            ChordKind::Sus4 => "sus4",
+        }
+    }
+
+    /// From a name suffix or the analyzer's quality ("maj", "min", "7"…).
+    pub fn parse(s: &str) -> Option<ChordKind> {
+        Some(match s.trim() {
+            "" | "maj" | "M" => ChordKind::Major,
+            "m" | "min" | "-" => ChordKind::Minor,
+            "7" | "dom7" => ChordKind::Dom7,
+            "maj7" | "M7" | "Δ" | "Δ7" => ChordKind::Maj7,
+            "m7" | "min7" | "-7" => ChordKind::Min7,
+            "dim" | "°" | "o" => ChordKind::Dim,
+            "aug" | "+" => ChordKind::Aug,
+            "sus2" => ChordKind::Sus2,
+            "sus4" | "sus" => ChordKind::Sus4,
+            _ => return None,
+        })
+    }
+
+    /// The plain three-note chord this one is built on (G7 → G).
+    pub fn triad(self) -> ChordKind {
+        match self {
+            ChordKind::Dom7 | ChordKind::Maj7 => ChordKind::Major,
+            ChordKind::Min7 => ChordKind::Minor,
+            k => k,
+        }
+    }
+
+    /// Minor-sounding (minor third, no major third).
+    pub fn is_minor(self) -> bool {
+        matches!(self, ChordKind::Minor | ChordKind::Min7 | ChordKind::Dim)
+    }
+
+    /// The kind with exactly these intervals above the root, if any.
+    pub fn from_intervals(iv: &[i32]) -> Option<ChordKind> {
+        let mut v: Vec<i32> = iv.iter().map(|i| i.rem_euclid(12)).collect();
+        v.sort();
+        v.dedup();
+        ChordKind::ALL
+            .into_iter()
+            .find(|k| k.intervals() == v.as_slice())
+    }
+}
+
+/// "G7" for a root pitch class and kind (sharps, like the analyzer).
+pub fn chord_symbol(root_pc: i32, kind: ChordKind) -> String {
+    format!("{}{}", pc_name(root_pc, false), kind.suffix())
+}
+
+/// Parse "G7", "F#m", "Bbmaj7" (the bass of "C/E" is ignored).
+pub fn parse_chord_symbol(s: &str) -> Option<(i32, ChordKind)> {
+    let s = s.split('/').next()?.trim();
+    let mut chars = s.chars();
+    let letter = chars.next()?;
+    let base: i32 = match letter {
+        'C' => 0,
+        'D' => 2,
+        'E' => 4,
+        'F' => 5,
+        'G' => 7,
+        'A' => 9,
+        'B' => 11,
+        _ => return None,
+    };
+    let rest = chars.as_str();
+    let (acc, rest) = if let Some(r) = rest.strip_prefix('#').or_else(|| rest.strip_prefix('♯')) {
+        (1, r)
+    } else if let Some(r) = rest.strip_prefix('b').or_else(|| rest.strip_prefix('♭')) {
+        (-1, r)
+    } else {
+        (0, rest)
+    };
+    Some(((base + acc).rem_euclid(12), ChordKind::parse(rest)?))
 }
 
 impl ChordRef {
@@ -191,6 +323,15 @@ impl ChordRef {
         let s = s.trim();
         if let Ok(n) = s.parse::<u8>() {
             return (1..=7).contains(&n).then_some(ChordRef::Diatonic(n));
+        }
+        // Chord names start with a capital letter A–G ("G7", "Bb", "F#m");
+        // roman numerals never do.
+        if s.starts_with(|c: char| ('A'..='G').contains(&c)) {
+            let (root, kind) = parse_chord_symbol(s)?;
+            return Some(ChordRef::Named {
+                root: root as u8,
+                kind,
+            });
         }
         let mut rest = s;
         let mut acc = 0;
@@ -241,6 +382,7 @@ impl ChordRef {
         match *self {
             ChordRef::Diatonic(d) => d.to_string(),
             ChordRef::Fixed { root, quality } => fixed_numeral(root as i32, quality),
+            ChordRef::Named { root, kind } => chord_symbol(root as i32, kind),
         }
     }
 
@@ -252,6 +394,7 @@ impl ChordRef {
                 ["I", "ii", "iii", "IV", "V", "vi", "vii°"][(d as usize - 1).min(6)]
             ),
             ChordRef::Fixed { .. } => format!("Borrowed chord {}", self.code()),
+            ChordRef::Named { .. } => format!("Chord {}", self.code()),
         }
     }
 }
@@ -353,7 +496,11 @@ pub struct Chord {
 pub fn build_chord(cref: ChordRef, mods: u8, tonic_pc: i32, scale: Scale) -> Chord {
     let has = |m: ChordMod| mods & m.bit() != 0;
     let tonic_pc = tonic_pc.rem_euclid(12);
+    if let ChordRef::Named { root, kind } = cref {
+        return build_named(root as i32, kind, mods, tonic_pc);
+    }
     let (root_off, mut q, mut seventh, flats, base_numeral) = match cref {
+        ChordRef::Named { .. } => unreachable!(),
         ChordRef::Diatonic(d) => {
             let s = scale.chord_steps();
             let d = (d.clamp(1, 7) - 1) as usize;
@@ -480,6 +627,80 @@ pub fn build_chord(cref: ChordRef, mods: u8, tonic_pc: i32, scale: Scale) -> Cho
         numeral += "sus4";
     }
 
+    Chord {
+        root_pc,
+        tones,
+        name,
+        numeral,
+    }
+}
+
+/// A named chord (song layouts) with the hold-to-change modifiers applied.
+fn build_named(root_pc: i32, kind: ChordKind, mods: u8, tonic_pc: i32) -> Chord {
+    let has = |m: ChordMod| mods & m.bit() != 0;
+    let root_pc = root_pc.rem_euclid(12);
+    let mut tones: Vec<i32> = kind.intervals().to_vec();
+    if has(ChordMod::Swap) {
+        for t in tones.iter_mut() {
+            *t = match *t {
+                4 => 3,
+                3 => 4,
+                x => x,
+            };
+        }
+    }
+    if has(ChordMod::Sus4) {
+        for t in tones.iter_mut() {
+            if matches!(*t, 2..=4) {
+                *t = 5;
+            }
+        }
+    }
+    if has(ChordMod::Seventh) && !tones.iter().any(|t| matches!(*t, 10 | 11)) {
+        tones.push(10);
+    }
+    if has(ChordMod::Add9) {
+        tones.push(14);
+    }
+    tones.sort();
+    tones.dedup();
+    let core: Vec<i32> = tones.iter().copied().filter(|t| *t < 12).collect();
+    let name = match ChordKind::from_intervals(&core) {
+        Some(k) if !tones.contains(&14) => chord_symbol(root_pc, k),
+        Some(k) => format!("{}add9", chord_symbol(root_pc, k)),
+        None => {
+            let mut n = chord_symbol(root_pc, kind);
+            if has(ChordMod::Seventh) {
+                n += "+7";
+            }
+            if has(ChordMod::Add9) {
+                n += "add9";
+            }
+            n
+        }
+    };
+    let q = if core.contains(&3) && !core.contains(&4) {
+        if core.contains(&6) && !core.contains(&7) {
+            Quality::Dim
+        } else {
+            Quality::Minor
+        }
+    } else if core.contains(&8) && !core.contains(&7) {
+        Quality::Aug
+    } else {
+        Quality::Major
+    };
+    let mut numeral = fixed_numeral((root_pc - tonic_pc).rem_euclid(12), q);
+    if core.contains(&11) {
+        numeral += "maj7";
+    } else if core.contains(&10) {
+        numeral += "7";
+    }
+    if core.contains(&5) && !core.contains(&4) && !core.contains(&3) {
+        numeral += "sus4";
+    } else if core.contains(&2) && !core.contains(&4) && !core.contains(&3) {
+        numeral += "sus2";
+    }
     Chord {
         root_pc,
         tones,
@@ -702,5 +923,45 @@ mod tests {
             prev = voice_chord(&ch, &prev, 55, true);
             assert!(prev.iter().all(|n| (40..=72).contains(n)), "{prev:?}");
         }
+    }
+
+    #[test]
+    fn named_chords_parse_and_build() {
+        use ChordMod::*;
+        let g7 = ChordRef::parse("G7").unwrap();
+        assert_eq!(
+            g7,
+            ChordRef::Named {
+                root: 7,
+                kind: ChordKind::Dom7
+            }
+        );
+        assert_eq!(g7.code(), "G7");
+        assert_eq!(ChordRef::parse("Bbm"), ChordRef::parse("A#m"));
+        // Roman numerals still work, and "bVII" isn't "B".
+        assert!(matches!(
+            ChordRef::parse("bVII"),
+            Some(ChordRef::Fixed { .. })
+        ));
+        let c = build_chord(g7, 0, 0, Scale::Major);
+        assert_eq!((c.name.as_str(), c.numeral.as_str()), ("G7", "V7"));
+        assert_eq!(c.tones, vec![0, 4, 7, 10]);
+        // Same chord whatever key the app is in; only the numeral changes.
+        let c = build_chord(g7, 0, 7, Scale::Major);
+        assert_eq!((c.name.as_str(), c.numeral.as_str()), ("G7", "I7"));
+        let am = ChordRef::parse("Am").unwrap();
+        assert_eq!(build_chord(am, 0, 0, Scale::Major).numeral, "vi");
+        assert_eq!(build_chord(am, Swap.bit(), 0, Scale::Major).name, "A");
+        assert_eq!(build_chord(am, Seventh.bit(), 0, Scale::Major).name, "Am7");
+        assert_eq!(
+            build_chord(ChordRef::parse("D").unwrap(), Sus4.bit(), 0, Scale::Major).name,
+            "Dsus4"
+        );
+        assert_eq!(parse_chord_symbol("C/E"), Some((0, ChordKind::Major)));
+        assert_eq!(parse_chord_symbol("N"), None);
+        assert_eq!(
+            ChordKind::from_intervals(&[0, 7, 3]),
+            Some(ChordKind::Minor)
+        );
     }
 }

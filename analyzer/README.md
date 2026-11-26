@@ -176,13 +176,6 @@ qwertone_analyzer/
 
 ## For the next parts
 
-- **Part 5** reads `song.json` (see the Rust sketch in SONG_FORMAT.md). Draw
-  `low_confidence` notes dimmed, and use `start_beat`/`end_beat` for the
-  falling-notes grid, loops and slow-down.
-- **Part 6 still to do (in Rust):** the note editor (load parts, fix notes,
-  save back with confidence 1.0) and live listen mode. A good way to start the
-  analyzer from the app: spawn `qwertone-analyze FILE --json-progress` and read
-  stderr line by line; the last event is `{"event": "done", "song_dir": …}`.
-- **Part 7** jam mode: the stems are in `stems/`; mute the stem of the part the
-  user plays. If a simplified part has `transpose != 0`, the backing needs
-  pitch-shifting too.
+The handoff notes for the app (Song mode, the note editor, live listen,
+jam mode) now live in [PLAN.md](../PLAN.md) at the top of the repo, with the
+rest of the project's notes.

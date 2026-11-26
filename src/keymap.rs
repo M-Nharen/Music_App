@@ -316,6 +316,7 @@ impl Keymap {
                 Action::Chord(c) => match c {
                     ChordRef::Diatonic(d) => *d as i32,
                     ChordRef::Fixed { root, .. } => 100 + *root as i32,
+                    ChordRef::Named { root, kind } => 200 + *root as i32 * 16 + *kind as i32,
                 },
                 Action::Mod(m) => ChordMod::ALL.iter().position(|x| x == m).unwrap_or(0) as i32,
                 Action::Drum(d) => *d as i32,

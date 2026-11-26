@@ -2,7 +2,7 @@
 
 Play music on your laptop keyboard. Built for Arch + Hyprland (end4 rice), works over Bluetooth earbuds, and lets you remap every key.
 
-> **Status: Part 3 of 9.** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
+> **Status: Parts 1, 2, 3, 5 and 6 of 9.** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), Song mode (falling notes, chord sheet, wait mode, loops, scoring, one-key mode, auto song layout), a note editor, live listen mode, the song analyzer (`analyzer/`), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
 
 ## Install (Arch)
 
@@ -139,6 +139,35 @@ Lessons light up the keys to press in your current layout, numbered in order, an
 
 On the Learn tab **F2** plays the example / question again and **F3** goes to the next step (unless your layout uses those keys).
 
+## Songs
+
+The **Song** tab teaches you real songs on your own keys.
+
+**Getting a song.** Two ways:
+
+- **Analyse a recording** (mp3, flac, wav, m4a…): pick the file (Browse…, or drag it onto the window), choose what you want (chords + melody is the best start; *Easy version* adds simplified parts) and press **Analyze**. Qwertone runs the analyzer (`qwertone-analyze`, see [analyzer/README.md](analyzer/README.md); install it once with `cd analyzer && ./setup.sh`) and shows a progress bar. Finished songs appear under **Your songs** (they live in `~/.local/share/qwertone/songs/`).
+- **Open a MIDI file**: any `.mid` works. Chords are guessed from the notes; MIDI files in `~/Music` and `~/Downloads` are listed.
+
+**Practising.** Notes fall towards a line; the letter on each note is the key to press when it reaches the line, and the strip under the line shows which key plays which note. Chords fall in their own lane on the left with their key ("G · Z").
+
+- **I play**: pick the parts you play (melody, easy melody, bass…) and/or the chords.
+- **Song layout** (on by default): switches to a layout made for the song. Each different chord of the song gets one key on the bottom rows (home chord on Z), and the song's notes get one key each on the top rows, low to high. The fewest keys possible. Untick it to go back to your own layout (the song's notes then use whatever keys your layout has; "Any octave counts" helps).
+- **Wait for me**: the song stops at each note until you press it. No rush; nothing is missed.
+- **One-key mode**: press any letter key and the next note(s) play. Good for feeling the rhythm first.
+- **Speed** 25–150 % (F7 / F8). **Loop** a section (click its name), *This bar ×2*, or drag across the timeline. *Speed up when I get it* goes 5 % faster after each loop pass of 90 % or more.
+- **Chord sheet** on the right: bars in rows of four, the current bar lit, roman numerals and the key for each chord. Click a bar (or the timeline) to jump.
+- **Scoring**: Perfect / Good / Missed, wrong keys, streaks, a result card at the end and your best score per song. In wait mode only right or wrong counts.
+- Notes the analyzer wasn't sure about are drawn dimmed and dashed with a "?". Trust your ears.
+- **F5** play/pause · **F6** restart · **F7/F8** slower/faster · **F9** wait mode on/off (when your layout doesn't use those keys).
+
+**Bluetooth.** The falling notes and the scoring are shifted by your measured delay (Audio & latency → latency test), and a slightly late press still counts (the same grace window as the chord keys). If it still feels off, *Sound & sync → Nudge* moves everything by a few ms.
+
+**Edit notes.** *Edit notes* opens the part with the most unsure notes in a piano roll. **Tab** jumps to the next unsure note (it plays so you can check it by ear), ↑↓ change its pitch, drag to move, drag the right edge to resize, double-click to add, Delete removes, **Enter** marks it "looks right", Ctrl+Z undoes. **Save** (Ctrl+S) writes `song.json` (every note you touched gets confidence 1.0; a `song.json.bak` is kept) and refreshes the song's MIDI files. For a plain MIDI file it saves `<name>-edited.mid` next to it.
+
+## Listen
+
+The **Listen** tab hears any audio input and shows the chord, the notes, the melody note (with a little tuner), the key so far and the chords heard, and lights the keys of your layout that play along. Pick the input that says *what the computer plays* to follow Spotify or a video without a microphone. Don't pick the earbuds' own microphone: Bluetooth switches to call quality while it's in use.
+
 ## Keybinds
 
 Open the **Keybinds** tab:
@@ -200,7 +229,7 @@ Settings live in `~/.config/qwertone/config.toml` and reload on save too (key, s
 Bluetooth adds roughly 150–250 ms of delay. That comes from the earbuds and the Bluetooth codec, not from Qwertone. To get the most out of it:
 
 1. **Audio & latency → Output.** If a lower-delay codec is available, click **Switch to a2dp-sink-sbc**. SBC has less delay than AAC or LDAC (LDAC on the XM4 has the most).
-2. **Run the latency test** with each pair and press **Save**. Later parts use this number to line up songs and falling notes with what you actually hear.
+2. **Run the latency test** with each pair and press **Save**. Song mode uses this number to line up the falling notes and the scoring with what you actually hear.
    Every saved pair appears under **Saved devices** (name, Bluetooth or wired, delay, instrument, and whether it's connected now), where you can rename, re-test or remove it.
 3. **Choose an instrument per device.** Sounds marked ✦ (pads, strings, organ, choir) have soft attacks that hide the delay. Qwertone switches to it automatically when those earbuds connect.
 4. Wired earphones (any cheap pair) bring the delay down to about 5 ms with no setup.
@@ -230,9 +259,16 @@ src/
   music.rs      note names, chord naming, instruments
   learn/        Learn mode logic (no UI): analysis.rs (the theory overlay),
                 intervals.rs, lessons.rs (all lesson content), ear.rs (games)
-  ui/           egui app (app.rs, app/play.rs, app/learn.rs, app/keybinds.rs),
-                custom widgets, circle.rs (circle of fifths),
+  song/         Song mode logic (no UI): song.json + MIDI reading/writing, chord
+                and key guessing, practice (targets, timing, wait, scoring),
+                the auto song layout, the note editor, running the analyzer
+  audio/songplay.rs   song playback in the audio thread (speed, loops, wait)
+  listen/       live listen: audio input + chord / note / pitch detection
+  ui/           egui app (app.rs, app/play.rs, app/learn.rs, app/song.rs,
+                app/listen.rs, app/keybinds.rs), custom widgets, circle.rs,
+                song_view.rs (falling notes, chord sheet, timeline, piano roll),
                 visuals.rs (keyboard / fretboard / fingerboard / flute / pads / waveform)
+analyzer/       the Python song analyzer (see analyzer/README.md)
 ```
 
 Run the tests with `cargo test`.

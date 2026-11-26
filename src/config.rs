@@ -91,6 +91,65 @@ pub struct Config {
 
     // ---- Learn mode (Part 3).
     pub learn: LearnProgress,
+
+    // ---- Song mode + live listen (Part 5).
+    pub song: SongSettings,
+}
+
+/// Song mode and live listen settings, plus best scores.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct SongSettings {
+    /// Stop at each note until you play it.
+    pub wait: bool,
+    /// Any key plays the next note.
+    pub one_key: bool,
+    /// A note in any octave counts.
+    pub any_octave: bool,
+    /// Switch to a layout made for the song when one is opened.
+    pub song_layout: bool,
+    pub metronome: bool,
+    /// One bar of clicks before playing starts.
+    pub count_in: bool,
+    /// Speed up 5 % after each good loop pass, up to 100 %.
+    pub auto_speed: bool,
+    /// Volume of the song's other parts.
+    pub backing: f32,
+    /// Extra sync adjustment on top of the measured delay (ms, + = later).
+    pub offset_ms: f32,
+    /// How many beats of falling notes to show.
+    pub beats_visible: f32,
+    /// Best accuracy (0–100) per song id.
+    pub best: BTreeMap<String, u32>,
+    /// Songs opened lately (paths), newest first.
+    pub recent: Vec<PathBuf>,
+    /// Live listen: input device id ("" = default), noise gate (dBFS),
+    /// major/minor only.
+    pub listen_input: String,
+    pub listen_gate_db: f32,
+    pub listen_basic: bool,
+}
+
+impl Default for SongSettings {
+    fn default() -> Self {
+        Self {
+            wait: true,
+            one_key: false,
+            any_octave: true,
+            song_layout: true,
+            metronome: false,
+            count_in: true,
+            auto_speed: true,
+            backing: 0.8,
+            offset_ms: 0.0,
+            beats_visible: 8.0,
+            best: BTreeMap::new(),
+            recent: Vec::new(),
+            listen_input: String::new(),
+            listen_gate_db: -50.0,
+            listen_basic: false,
+        }
+    }
 }
 
 /// Lesson progress, ear-training records and the theory overlay switch.
@@ -154,6 +213,7 @@ impl Default for Config {
             bass_instrument: 0,
             visual: "auto".into(),
             learn: LearnProgress::default(),
+            song: SongSettings::default(),
         }
     }
 }

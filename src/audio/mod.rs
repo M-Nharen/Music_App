@@ -7,6 +7,7 @@
 pub mod builtin;
 pub mod patterns;
 pub mod sequencer;
+pub mod songplay;
 
 use anyhow::{Context, Result, anyhow};
 use builtin::BuiltinSynth;
@@ -16,6 +17,7 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use patterns::Pattern;
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 use sequencer::{CH_DRUMS, ChordNotes, SeqEvent, Sequencer, StyleParams};
+use songplay::{SongClock, SongCommand, SongPlayer};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -64,6 +66,14 @@ pub enum Command {
         note: u8,
         velocity: u8,
     },
+    /// Song mode playback.
+    Song(SongCommand),
+    /// Note on / off on any channel (one-key mode plays the song's notes).
+    ChannelNote {
+        channel: u8,
+        note: u8,
+        velocity: u8,
+    },
 }
 
 /// Numbers the UI shows about the engine. Written by the audio thread.
@@ -85,6 +95,8 @@ pub struct Stats {
     pub seq_steps_per_beat: AtomicU32,
     pub host: Mutex<String>,
     pub device: Mutex<String>,
+    /// Song mode clock (updated with try_lock, never blocks audio).
+    pub song_clock: Mutex<SongClock>,
 }
 
 impl Stats {
@@ -119,8 +131,8 @@ struct Renderer {
     click_tx: Sender<Instant>,
     stats: Arc<Stats>,
     sample_rate: u32,
-    /// Programs for channels 0 (melody), 1 (chords), 2 (bass).
-    programs: [u8; 3],
+    /// Program per channel: 0 melody, 1 chords, 2 bass, 3.. song parts.
+    programs: [u8; 16],
     volume: f32,
     sustain: bool,
     held: [bool; 128],
@@ -130,6 +142,7 @@ struct Renderer {
     sample_clock: u64,
     metro: Metronome,
     seq: Sequencer,
+    song: SongPlayer,
 }
 
 const CLICK_LEN: usize = 1200;
@@ -154,7 +167,7 @@ impl Renderer {
             click_tx,
             stats,
             sample_rate,
-            programs: [program; 3],
+            programs: [program; 16],
             volume,
             sustain: false,
             held: [false; 128],
@@ -170,11 +183,35 @@ impl Renderer {
                 click_pos: None,
             },
             seq: Sequencer::new(sample_rate),
+            song: SongPlayer::new(sample_rate),
         }
     }
 
-    fn handle(&mut self, cmd: Command) {
+    fn handle(&mut self, cmd: Command, now: Instant) {
         match cmd {
+            Command::Song(c) => {
+                let (song, backend) = (&mut self.song, &mut self.backend);
+                song.handle(c, now, &mut |e| backend_event(backend, e));
+            }
+            Command::ChannelNote {
+                channel,
+                note,
+                velocity,
+            } => backend_event(
+                &mut self.backend,
+                if velocity > 0 {
+                    SeqEvent::On {
+                        ch: channel & 15,
+                        note: note & 127,
+                        vel: velocity.min(127),
+                    }
+                } else {
+                    SeqEvent::Off {
+                        ch: channel & 15,
+                        note: note & 127,
+                    }
+                },
+            ),
             Command::NoteOn { note, velocity } => {
                 if !(0..128).contains(&note) {
                     return;
@@ -235,6 +272,7 @@ impl Renderer {
                 self.held = [false; 128];
                 self.sustained = [false; 128];
                 self.seq.reset();
+                self.song.handle(SongCommand::Play(false), now, &mut |_| {});
                 match &mut self.backend {
                     Backend::Builtin(s) => s.all_off(),
                     Backend::SoundFont(s) => s.note_off_all(true),
@@ -303,6 +341,9 @@ impl Renderer {
 
     fn apply_program(&mut self) {
         for (ch, &prog) in self.programs.iter().enumerate() {
+            if ch == CH_DRUMS as usize {
+                continue;
+            }
             match &mut self.backend {
                 Backend::Builtin(s) => s.set_program(ch as u8, prog),
                 // 0xC0 = program change.
@@ -315,8 +356,10 @@ impl Renderer {
     /// Separate from the cpal callback so it can be tested offline.
     fn render_block(&mut self, frames: usize, started: Instant) {
         while let Ok(cmd) = self.rx.try_recv() {
-            self.handle(cmd);
+            self.handle(cmd, started);
         }
+        let sr = self.sample_rate as f64;
+        let at = |frame: usize| started + Duration::from_secs_f64(frame as f64 / sr);
         if self.left.len() < frames {
             // Only happens if the host changes buffer size; allocation is rare.
             self.left.resize(frames, 0.0);
@@ -330,17 +373,27 @@ impl Renderer {
             {
                 let (seq, backend) = (&mut self.seq, &mut self.backend);
                 seq.process(now, &mut |e| backend_event(backend, e));
+                let (song, backend) = (&mut self.song, &mut self.backend);
+                song.process(at(pos), &mut |e| backend_event(backend, e));
             }
-            let end = match self.seq.next_time() {
+            let mut end = match self.seq.next_time() {
                 Some(t) => ((t.max(now + 1) - self.sample_clock) as usize).min(frames),
                 None => frames,
             };
+            if let Some(n) = self.song.samples_until_next() {
+                end = end.min(pos + (n as usize).max(1));
+            }
             let (l, r) = (&mut self.left[pos..end], &mut self.right[pos..end]);
             match &mut self.backend {
                 Backend::Builtin(s) => s.render(l, r),
                 Backend::SoundFont(s) => s.render(l, r),
             }
+            self.song.advance(end - pos);
+            self.song.after_render();
             pos = end;
+        }
+        if let Ok(mut c) = self.stats.song_clock.try_lock() {
+            *c = self.song.clock(at(frames));
         }
         if let Backend::Builtin(s) = &self.backend {
             self.stats

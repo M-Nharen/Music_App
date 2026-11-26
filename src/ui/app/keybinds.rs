@@ -265,6 +265,9 @@ impl QwertoneApp {
                     match r {
                         ChordRef::Diatonic(d) => format!("Step {d}: {} ({})", ch.numeral, ch.name),
                         ChordRef::Fixed { .. } => format!("Borrowed {} ({})", r.code(), ch.name),
+                        ChordRef::Named { .. } => {
+                            format!("Song chord {} ({})", ch.name, ch.numeral)
+                        }
                     }
                 };
                 egui::ComboBox::from_id_salt("chordref")

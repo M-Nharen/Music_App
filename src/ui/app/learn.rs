@@ -176,7 +176,7 @@ impl QwertoneApp {
     }
 
     /// Every (note, key) the layout plays right now.
-    fn note_keys(&self) -> Vec<(i32, KeyId)> {
+    pub(super) fn note_keys(&self) -> Vec<(i32, KeyId)> {
         let mut v: Vec<(i32, KeyId)> = self
             .keymap
             .bindings
@@ -236,7 +236,7 @@ impl QwertoneApp {
     }
 
     /// Of several keys, the one in the same row as `prev`, else the lowest row.
-    fn pick_key(keys: &[KeyId], prev: Option<KeyId>) -> Option<KeyId> {
+    pub(super) fn pick_key(keys: &[KeyId], prev: Option<KeyId>) -> Option<KeyId> {
         let prev_row = prev.and_then(key_position).map(|(r, _)| r);
         keys.iter().copied().min_by_key(|k| {
             let pos = key_position(*k);
@@ -247,7 +247,7 @@ impl QwertoneApp {
 
     /// Keys for a note: exact if possible, otherwise the same note name in
     /// the nearest octave. Returns (keys, exact?).
-    fn keys_for_note(note_keys: &[(i32, KeyId)], note: i32) -> (Vec<KeyId>, bool) {
+    pub(super) fn keys_for_note(note_keys: &[(i32, KeyId)], note: i32) -> (Vec<KeyId>, bool) {
         let exact: Vec<KeyId> = note_keys
             .iter()
             .filter(|(n, _)| *n == note)

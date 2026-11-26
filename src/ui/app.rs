@@ -3,7 +3,9 @@
 
 mod keybinds;
 mod learn;
+mod listen;
 mod play;
+mod song;
 
 use crate::audio::patterns::Pattern;
 use crate::audio::sequencer::{ChordNotes, StyleKind, StyleParams};
@@ -39,6 +41,8 @@ const FIXED_STYLES: [(&str, &str); 3] = [
 enum Tab {
     Play,
     Learn,
+    Song,
+    Listen,
     Keybinds,
     Audio,
     KeyTest,
@@ -120,6 +124,9 @@ pub struct QwertoneApp {
 
     /// Learn mode: lessons, ear training, theory overlay.
     learn: learn::LearnUi,
+    /// Song mode (Part 5) and live listen.
+    song_ui: song::SongUi,
+    listen: listen::ListenUi,
 
     toast: Option<(String, Instant)>,
     last_poll: Instant,
@@ -191,6 +198,8 @@ impl QwertoneApp {
             max_held: 0,
             best_combo: Vec::new(),
             learn: learn::LearnUi::new(&Default::default()),
+            song_ui: song::SongUi::new(),
+            listen: listen::ListenUi::default(),
             toast: None,
             last_poll: Instant::now(),
         };
@@ -216,6 +225,8 @@ impl QwertoneApp {
                 self.send_programs();
                 self.send_style();
                 self.load_soundfont(self.cfg.soundfont.clone());
+                // A new audio thread has no song: hand it over again.
+                self.song_resend();
             }
             Err(e) => {
                 self.engine_error = Some(format!("{e:#}"));
@@ -287,6 +298,7 @@ impl QwertoneApp {
 
     fn all_notes_off(&mut self) {
         self.sounding.clear();
+        self.song_stop_sounds();
         self.sustain_on = false;
         self.reset_chord_state();
         self.send(Command::Sustain(false));
@@ -365,8 +377,15 @@ impl QwertoneApp {
     }
 
     fn send_style(&self) {
+        // Song mode: chord keys play plain block chords (a running pattern
+        // would fight the song's own rhythm).
+        let song = self.song_ui.style_overridden;
         let params = StyleParams {
-            kind: self.style_kind(),
+            kind: if song {
+                StyleKind::Block
+            } else {
+                self.style_kind()
+            },
             strum_ms: self.cfg.strum_ms.clamp(5.0, 120.0),
             arp_mode: self.cfg.arp_mode,
             arp_steps_per_beat: self.cfg.arp_rate.clamp(1, 8),
@@ -374,7 +393,7 @@ impl QwertoneApp {
             gate: 0.8,
             bass: self.cfg.chord_bass,
             drums: self.cfg.drums,
-            latch: self.cfg.latch,
+            latch: self.cfg.latch && !song,
             grace_ms: self.grace_ms(),
         };
         self.send(Command::Tempo(self.cfg.tempo.clamp(40.0, 240.0)));
@@ -584,7 +603,7 @@ impl QwertoneApp {
                     main: ch.name,
                     sub: ch.numeral,
                     style: match c {
-                        ChordRef::Diatonic(_) => CapStyle::Chord,
+                        ChordRef::Diatonic(_) | ChordRef::Named { .. } => CapStyle::Chord,
                         ChordRef::Fixed { .. } => CapStyle::Borrowed,
                     },
                 }
@@ -675,6 +694,7 @@ impl QwertoneApp {
                 }
                 self.sounding.insert(key, note);
                 self.learn_event(crate::learn::ear::Played::Note(note));
+                self.song_event(crate::song::practice::Played::Note(note));
             }
             Action::Chord(c) => {
                 if self.chord_keys.iter().any(|(k, _)| *k == key) {
@@ -685,6 +705,9 @@ impl QwertoneApp {
                 self.play_chord(c, true);
                 if let Some(ev) = self.chord_event() {
                     self.learn_event(ev);
+                }
+                if let Some(ev) = self.chord_played() {
+                    self.song_event(ev);
                 }
             }
             Action::Mod(m) => {
@@ -700,6 +723,7 @@ impl QwertoneApp {
                 });
                 self.last_drum = Some((d, Instant::now()));
                 self.drum_hits.insert(d, Instant::now());
+                self.song_event(crate::song::practice::Played::Drum(d));
             }
             Action::Sustain => {
                 self.sustain_on = true;
@@ -907,6 +931,10 @@ impl QwertoneApp {
             }
             return true;
         }
+        // Song tab: play/pause and friends, one-key mode, the note editor.
+        if !typing && self.song_key(k, pressed, repeat, modifiers) {
+            return true;
+        }
         // Ctrl/Alt + key is a shortcut unless this layout uses Ctrl/Alt.
         let shortcut = ((modifiers.ctrl || modifiers.command)
             && self.keymap.get(KeyId::Ctrl).is_none())
@@ -950,6 +978,10 @@ impl QwertoneApp {
         // Lesson / ear-training examples.
         if self.tick_player() {
             ctx.request_repaint_after(Duration::from_millis(10));
+        }
+        // Song mode: clock, scoring, analyzer progress.
+        if self.song_poll(ctx) {
+            ctx.request_repaint_after(Duration::from_millis(15));
         }
 
         // Debounced config save.
@@ -1097,6 +1129,8 @@ impl QwertoneApp {
             for (tab, label) in [
                 (Tab::Play, "Play"),
                 (Tab::Learn, "Learn"),
+                (Tab::Song, "Song"),
+                (Tab::Listen, "Listen"),
                 (Tab::Keybinds, "Keybinds"),
                 (Tab::Audio, "Audio & latency"),
                 (Tab::KeyTest, "Keyboard test"),
@@ -1669,6 +1703,8 @@ impl eframe::App for QwertoneApp {
             .show(ui, |ui| match self.tab {
                 Tab::Play => self.play_tab(ui),
                 Tab::Learn => self.learn_tab(ui),
+                Tab::Song => self.song_tab(ui),
+                Tab::Listen => self.listen_tab(ui),
                 Tab::Keybinds => self.keybinds_tab(ui),
                 Tab::Audio => self.audio_tab(ui),
                 Tab::KeyTest => self.keytest_tab(ui),

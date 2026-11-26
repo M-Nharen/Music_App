@@ -1,0 +1,3810 @@
+{
+ "format": "qwertone-song",
+ "format_version": 1,
+ "analyzer": {
+  "mode": "chords+melody",
+  "instrument": null,
+  "options": {
+   "mode": "chords+melody",
+   "instrument": null,
+   "simplify": true,
+   "difficulty": 2,
+   "transpose": "auto",
+   "max_keys": null,
+   "separate": false,
+   "stems_model": null,
+   "device": "auto",
+   "crepe_model": "auto",
+   "pitch_method": "auto",
+   "chord_vocab": "extended",
+   "low_confidence": 0.5,
+   "shifts": 0
+  },
+  "fingerprint": "c2302729b894",
+  "models": {
+   "stems": null,
+   "melody": "pyin"
+  },
+  "device": "cpu",
+  "version": "0.6.0",
+  "created": "2026-11-26T00:17:28+00:00"
+ },
+ "source": {
+  "kind": "audio",
+  "file": "mix.wav",
+  "path": "/tmp/clip/mix.wav",
+  "sha256": "ebba40db670ea5420803c78a7ea9dd491914bf4bd61bc08eb4a5d23346786e3f",
+  "duration": 25.5,
+  "sample_rate": 44100
+ },
+ "metadata": {
+  "title": "mix",
+  "artist": null,
+  "album": null
+ },
+ "duration": 25.5,
+ "low_confidence_threshold": 0.5,
+ "stems": [],
+ "midi": "song.mid",
+ "tempo": {
+  "bpm": 119.98,
+  "beats_per_bar": 4,
+  "time_signature": [
+   4,
+   4
+  ],
+  "confidence": 0.908,
+  "downbeat_confidence": 1.0
+ },
+ "beats": [
+  {
+   "time": 0.5108,
+   "bar": 1,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 1.0217,
+   "bar": 1,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 1.5325,
+   "bar": 1,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 2.0201,
+   "bar": 1,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 2.531,
+   "bar": 2,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 3.0186,
+   "bar": 2,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 3.5294,
+   "bar": 2,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 4.0171,
+   "bar": 2,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 4.5279,
+   "bar": 3,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 5.0155,
+   "bar": 3,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 5.5263,
+   "bar": 3,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 6.0372,
+   "bar": 3,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 6.5248,
+   "bar": 4,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 7.0356,
+   "bar": 4,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 7.5233,
+   "bar": 4,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 8.0341,
+   "bar": 4,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 8.5217,
+   "bar": 5,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 9.0326,
+   "bar": 5,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 9.5202,
+   "bar": 5,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 10.031,
+   "bar": 5,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 10.5186,
+   "bar": 6,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 11.0295,
+   "bar": 6,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 11.5403,
+   "bar": 6,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 12.0279,
+   "bar": 6,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 12.5388,
+   "bar": 7,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 13.0264,
+   "bar": 7,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 13.5372,
+   "bar": 7,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 14.0249,
+   "bar": 7,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 14.5357,
+   "bar": 8,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 15.0233,
+   "bar": 8,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 15.5341,
+   "bar": 8,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 16.0218,
+   "bar": 8,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 16.5326,
+   "bar": 9,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 17.0202,
+   "bar": 9,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 17.5311,
+   "bar": 9,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 18.0187,
+   "bar": 9,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 18.5295,
+   "bar": 10,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 19.0171,
+   "bar": 10,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 19.528,
+   "bar": 10,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 20.0156,
+   "bar": 10,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 20.5264,
+   "bar": 11,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 21.0373,
+   "bar": 11,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 21.5249,
+   "bar": 11,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 22.0357,
+   "bar": 11,
+   "beat": 4,
+   "downbeat": false
+  },
+  {
+   "time": 22.5234,
+   "bar": 12,
+   "beat": 1,
+   "downbeat": true
+  },
+  {
+   "time": 23.0342,
+   "bar": 12,
+   "beat": 2,
+   "downbeat": false
+  },
+  {
+   "time": 23.5218,
+   "bar": 12,
+   "beat": 3,
+   "downbeat": false
+  },
+  {
+   "time": 24.0327,
+   "bar": 12,
+   "beat": 4,
+   "downbeat": false
+  }
+ ],
+ "key": {
+  "tonic": "G",
+  "tonic_pc": 7,
+  "mode": "major",
+  "name": "G major",
+  "confidence": 0.515,
+  "alternatives": [
+   {
+    "name": "E minor",
+    "score": 0.825
+   },
+   {
+    "name": "C major",
+    "score": 0.784
+   },
+   {
+    "name": "A minor",
+    "score": 0.554
+   }
+  ]
+ },
+ "chords": [
+  {
+   "start": 0.0,
+   "end": 0.5108,
+   "start_beat": -0.9998,
+   "end_beat": 0.0,
+   "symbol": "N",
+   "root": null,
+   "quality": null,
+   "bass": null,
+   "pitch_classes": [],
+   "roman": null,
+   "diatonic": null,
+   "confidence": 1.0,
+   "low_confidence": false
+  },
+  {
+   "start": 0.5108,
+   "end": 2.531,
+   "start_beat": 0.0,
+   "end_beat": 4.0,
+   "symbol": "G",
+   "root": "G",
+   "quality": "maj",
+   "bass": null,
+   "pitch_classes": [
+    7,
+    11,
+    2
+   ],
+   "roman": "I",
+   "diatonic": true,
+   "confidence": 0.768,
+   "low_confidence": false
+  },
+  {
+   "start": 2.531,
+   "end": 4.5279,
+   "start_beat": 4.0,
+   "end_beat": 8.0,
+   "symbol": "Em",
+   "root": "E",
+   "quality": "min",
+   "bass": null,
+   "pitch_classes": [
+    4,
+    7,
+    11
+   ],
+   "roman": "vi",
+   "diatonic": true,
+   "confidence": 0.961,
+   "low_confidence": false
+  },
+  {
+   "start": 4.5279,
+   "end": 6.5248,
+   "start_beat": 8.0,
+   "end_beat": 12.0,
+   "symbol": "C",
+   "root": "C",
+   "quality": "maj",
+   "bass": null,
+   "pitch_classes": [
+    0,
+    4,
+    7
+   ],
+   "roman": "IV",
+   "diatonic": true,
+   "confidence": 0.879,
+   "low_confidence": false
+  },
+  {
+   "start": 6.5248,
+   "end": 8.5217,
+   "start_beat": 12.0,
+   "end_beat": 16.0,
+   "symbol": "D",
+   "root": "D",
+   "quality": "maj",
+   "bass": null,
+   "pitch_classes": [
+    2,
+    6,
+    9
+   ],
+   "roman": "V",
+   "diatonic": true,
+   "confidence": 0.881,
+   "low_confidence": false
+  },
+  {
+   "start": 8.5217,
+   "end": 10.5186,
+   "start_beat": 16.0,
+   "end_beat": 20.0,
+   "symbol": "Em",
+   "root": "E",
+   "quality": "min",
+   "bass": null,
+   "pitch_classes": [
+    4,
+    7,
+    11
+   ],
+   "roman": "vi",
+   "diatonic": true,
+   "confidence": 1.0,
+   "low_confidence": false
+  },
+  {
+   "start": 10.5186,
+   "end": 12.5388,
+   "start_beat": 20.0,
+   "end_beat": 24.0,
+   "symbol": "Bm",
+   "root": "B",
+   "quality": "min",
+   "bass": null,
+   "pitch_classes": [
+    11,
+    2,
+    6
+   ],
+   "roman": "iii",
+   "diatonic": true,
+   "confidence": 1.0,
+   "low_confidence": false
+  },
+  {
+   "start": 12.5388,
+   "end": 14.5357,
+   "start_beat": 24.0,
+   "end_beat": 28.0,
+   "symbol": "C",
+   "root": "C",
+   "quality": "maj",
+   "bass": null,
+   "pitch_classes": [
+    0,
+    4,
+    7
+   ],
+   "roman": "IV",
+   "diatonic": true,
+   "confidence": 0.748,
+   "low_confidence": false
+  },
+  {
+   "start": 14.5357,
+   "end": 16.5326,
+   "start_beat": 28.0,
+   "end_beat": 32.0,
+   "symbol": "Am",
+   "root": "A",
+   "quality": "min",
+   "bass": null,
+   "pitch_classes": [
+    9,
+    0,
+    4
+   ],
+   "roman": "ii",
+   "diatonic": true,
+   "confidence": 1.0,
+   "low_confidence": false
+  },
+  {
+   "start": 16.5326,
+   "end": 18.5295,
+   "start_beat": 32.0,
+   "end_beat": 36.0,
+   "symbol": "G",
+   "root": "G",
+   "quality": "maj",
+   "bass": null,
+   "pitch_classes": [
+    7,
+    11,
+    2
+   ],
+   "roman": "I",
+   "diatonic": true,
+   "confidence": 0.771,
+   "low_confidence": false
+  },
+  {
+   "start": 18.5295,
+   "end": 20.5264,
+   "start_beat": 36.0,
+   "end_beat": 40.0,
+   "symbol": "Em",
+   "root": "E",
+   "quality": "min",
+   "bass": null,
+   "pitch_classes": [
+    4,
+    7,
+    11
+   ],
+   "roman": "vi",
+   "diatonic": true,
+   "confidence": 1.0,
+   "low_confidence": false
+  },
+  {
+   "start": 20.5264,
+   "end": 22.5234,
+   "start_beat": 40.0,
+   "end_beat": 44.0,
+   "symbol": "C",
+   "root": "C",
+   "quality": "maj",
+   "bass": null,
+   "pitch_classes": [
+    0,
+    4,
+    7
+   ],
+   "roman": "IV",
+   "diatonic": true,
+   "confidence": 0.864,
+   "low_confidence": false
+  },
+  {
+   "start": 22.5234,
+   "end": 25.5,
+   "start_beat": 44.0,
+   "end_beat": 49.872,
+   "symbol": "D",
+   "root": "D",
+   "quality": "maj",
+   "bass": null,
+   "pitch_classes": [
+    2,
+    6,
+    9
+   ],
+   "roman": "V",
+   "diatonic": true,
+   "confidence": 0.93,
+   "low_confidence": false
+  }
+ ],
+ "sections": [
+  {
+   "start": 0.0,
+   "end": 8.5217,
+   "start_bar": 1,
+   "end_bar": 4,
+   "label": "A",
+   "name": "chorus",
+   "confidence": 1.0
+  },
+  {
+   "start": 8.5217,
+   "end": 16.5326,
+   "start_bar": 5,
+   "end_bar": 8,
+   "label": "B",
+   "name": "bridge",
+   "confidence": 1.0
+  },
+  {
+   "start": 16.5326,
+   "end": 25.5,
+   "start_bar": 9,
+   "end_bar": 12,
+   "label": "A",
+   "name": "chorus",
+   "confidence": 0.879
+  }
+ ],
+ "parts": [
+  {
+   "id": "melody",
+   "name": "Melody",
+   "role": "melody",
+   "method": "pyin",
+   "stem": "mix",
+   "is_drum": false,
+   "program": 0,
+   "midi_track": 1,
+   "midi_channel": 0,
+   "midi_file": "midi/melody.mid",
+   "transpose": 0,
+   "simplified": null,
+   "note_count": 71,
+   "low_confidence_count": 71,
+   "pitch_range": [
+    36,
+    43
+   ],
+   "notes": [
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 0.64,
+     "end": 0.76,
+     "start_beat": 0.2529,
+     "end_beat": 0.4878,
+     "velocity": 105,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 0.76,
+     "end": 0.97,
+     "start_beat": 0.4878,
+     "end_beat": 0.8988,
+     "velocity": 104,
+     "confidence": 0.177,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 1.02,
+     "end": 1.27,
+     "start_beat": 0.9967,
+     "end_beat": 1.4861,
+     "velocity": 102,
+     "confidence": 0.168,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 1.27,
+     "end": 1.39,
+     "start_beat": 1.4861,
+     "end_beat": 1.721,
+     "velocity": 99,
+     "confidence": 0.172,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 1.67,
+     "end": 1.78,
+     "start_beat": 2.282,
+     "end_beat": 2.5076,
+     "velocity": 103,
+     "confidence": 0.114,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 1.78,
+     "end": 1.97,
+     "start_beat": 2.5076,
+     "end_beat": 2.8973,
+     "velocity": 99,
+     "confidence": 0.149,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 2.05,
+     "end": 2.27,
+     "start_beat": 3.0585,
+     "end_beat": 3.4891,
+     "velocity": 102,
+     "confidence": 0.173,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 2.27,
+     "end": 2.4,
+     "start_beat": 3.4891,
+     "end_beat": 3.7436,
+     "velocity": 99,
+     "confidence": 0.188,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 3.06,
+     "end": 3.26,
+     "start_beat": 5.081,
+     "end_beat": 5.4726,
+     "velocity": 105,
+     "confidence": 0.19,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 3.26,
+     "end": 3.4,
+     "start_beat": 5.4726,
+     "end_beat": 5.7467,
+     "velocity": 100,
+     "confidence": 0.192,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 3.66,
+     "end": 3.77,
+     "start_beat": 6.2678,
+     "end_beat": 6.4933,
+     "velocity": 102,
+     "confidence": 0.127,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 3.77,
+     "end": 3.97,
+     "start_beat": 6.4933,
+     "end_beat": 6.9034,
+     "velocity": 99,
+     "confidence": 0.164,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 4.06,
+     "end": 4.26,
+     "start_beat": 7.084,
+     "end_beat": 7.4755,
+     "velocity": 99,
+     "confidence": 0.154,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 4.26,
+     "end": 4.4,
+     "start_beat": 7.4755,
+     "end_beat": 7.7496,
+     "velocity": 96,
+     "confidence": 0.158,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 4.62,
+     "end": 4.77,
+     "start_beat": 8.1889,
+     "end_beat": 8.4965,
+     "velocity": 107,
+     "confidence": 0.112,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 4.77,
+     "end": 4.98,
+     "start_beat": 8.4965,
+     "end_beat": 8.9272,
+     "velocity": 102,
+     "confidence": 0.128,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 5.07,
+     "end": 5.26,
+     "start_beat": 9.1067,
+     "end_beat": 9.4787,
+     "velocity": 103,
+     "confidence": 0.106,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 5.26,
+     "end": 5.39,
+     "start_beat": 9.4787,
+     "end_beat": 9.7332,
+     "velocity": 101,
+     "confidence": 0.119,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 5.64,
+     "end": 5.77,
+     "start_beat": 10.2225,
+     "end_beat": 10.477,
+     "velocity": 102,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 5.77,
+     "end": 5.95,
+     "start_beat": 10.477,
+     "end_beat": 10.8293,
+     "velocity": 100,
+     "confidence": 0.128,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 6.06,
+     "end": 6.26,
+     "start_beat": 11.0468,
+     "end_beat": 11.4569,
+     "velocity": 103,
+     "confidence": 0.124,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 6.26,
+     "end": 6.4,
+     "start_beat": 11.4569,
+     "end_beat": 11.7441,
+     "velocity": 101,
+     "confidence": 0.129,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 6.65,
+     "end": 6.77,
+     "start_beat": 12.2451,
+     "end_beat": 12.48,
+     "velocity": 106,
+     "confidence": 0.121,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 6.77,
+     "end": 6.99,
+     "start_beat": 12.48,
+     "end_beat": 12.9107,
+     "velocity": 102,
+     "confidence": 0.147,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 7.06,
+     "end": 7.26,
+     "start_beat": 13.05,
+     "end_beat": 13.4601,
+     "velocity": 104,
+     "confidence": 0.116,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 7.26,
+     "end": 7.4,
+     "start_beat": 13.4601,
+     "end_beat": 13.7472,
+     "velocity": 101,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 7.67,
+     "end": 7.77,
+     "start_beat": 14.2872,
+     "end_beat": 14.483,
+     "velocity": 102,
+     "confidence": 0.115,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 7.77,
+     "end": 7.99,
+     "start_beat": 14.483,
+     "end_beat": 14.9137,
+     "velocity": 99,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 8.06,
+     "end": 8.26,
+     "start_beat": 15.0531,
+     "end_beat": 15.4633,
+     "velocity": 104,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 8.26,
+     "end": 8.41,
+     "start_beat": 15.4633,
+     "end_beat": 15.7709,
+     "velocity": 100,
+     "confidence": 0.158,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 8.69,
+     "end": 8.77,
+     "start_beat": 16.3294,
+     "end_beat": 16.486,
+     "velocity": 106,
+     "confidence": 0.124,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 8.77,
+     "end": 8.88,
+     "start_beat": 16.486,
+     "end_beat": 16.7013,
+     "velocity": 105,
+     "confidence": 0.179,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 8.88,
+     "end": 8.98,
+     "start_beat": 16.7013,
+     "end_beat": 16.897,
+     "velocity": 100,
+     "confidence": 0.178,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 9.09,
+     "end": 9.28,
+     "start_beat": 17.1177,
+     "end_beat": 17.5074,
+     "velocity": 104,
+     "confidence": 0.115,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 9.28,
+     "end": 9.39,
+     "start_beat": 17.5074,
+     "end_beat": 17.733,
+     "velocity": 102,
+     "confidence": 0.129,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 9.77,
+     "end": 9.88,
+     "start_beat": 18.489,
+     "end_beat": 18.7044,
+     "velocity": 100,
+     "confidence": 0.154,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 9.88,
+     "end": 9.98,
+     "start_beat": 18.7044,
+     "end_beat": 18.9002,
+     "velocity": 96,
+     "confidence": 0.152,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 12.65,
+     "end": 12.76,
+     "start_beat": 24.2281,
+     "end_beat": 24.4537,
+     "velocity": 108,
+     "confidence": 0.102,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 12.76,
+     "end": 12.9,
+     "start_beat": 24.4537,
+     "end_beat": 24.7408,
+     "velocity": 105,
+     "confidence": 0.14,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 12.9,
+     "end": 12.99,
+     "start_beat": 24.7408,
+     "end_beat": 24.9253,
+     "velocity": 100,
+     "confidence": 0.12,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 13.09,
+     "end": 13.27,
+     "start_beat": 25.1245,
+     "end_beat": 25.4769,
+     "velocity": 103,
+     "confidence": 0.097,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 13.27,
+     "end": 13.39,
+     "start_beat": 25.4769,
+     "end_beat": 25.7118,
+     "velocity": 102,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 13.76,
+     "end": 13.9,
+     "start_beat": 26.4568,
+     "end_beat": 26.7439,
+     "velocity": 101,
+     "confidence": 0.109,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 13.9,
+     "end": 13.99,
+     "start_beat": 26.7439,
+     "end_beat": 26.9284,
+     "velocity": 96,
+     "confidence": 0.106,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 14.1,
+     "end": 14.27,
+     "start_beat": 27.147,
+     "end_beat": 27.4798,
+     "velocity": 101,
+     "confidence": 0.101,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 14.27,
+     "end": 14.39,
+     "start_beat": 27.4798,
+     "end_beat": 27.7148,
+     "velocity": 101,
+     "confidence": 0.108,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 16.75,
+     "end": 17.01,
+     "start_beat": 32.4459,
+     "end_beat": 32.9791,
+     "velocity": 102,
+     "confidence": 0.176,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 17.08,
+     "end": 17.27,
+     "start_beat": 33.117,
+     "end_beat": 33.4889,
+     "velocity": 103,
+     "confidence": 0.171,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 17.27,
+     "end": 17.42,
+     "start_beat": 33.4889,
+     "end_beat": 33.7825,
+     "velocity": 98,
+     "confidence": 0.184,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 17.7,
+     "end": 17.78,
+     "start_beat": 34.3464,
+     "end_beat": 34.5105,
+     "velocity": 101,
+     "confidence": 0.119,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 17.78,
+     "end": 18.26,
+     "start_beat": 34.5105,
+     "end_beat": 35.4724,
+     "velocity": 99,
+     "confidence": 0.152,
+     "low_confidence": true
+    },
+    {
+     "pitch": 43,
+     "name": "G2",
+     "start": 18.26,
+     "end": 18.44,
+     "start_beat": 35.4724,
+     "end_beat": 35.8248,
+     "velocity": 99,
+     "confidence": 0.181,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 19.1,
+     "end": 19.26,
+     "start_beat": 37.1623,
+     "end_beat": 37.4754,
+     "velocity": 105,
+     "confidence": 0.188,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 19.26,
+     "end": 19.43,
+     "start_beat": 37.4754,
+     "end_beat": 37.8082,
+     "velocity": 101,
+     "confidence": 0.197,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 19.77,
+     "end": 20.01,
+     "start_beat": 38.4963,
+     "end_beat": 38.9885,
+     "velocity": 99,
+     "confidence": 0.161,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 20.1,
+     "end": 20.26,
+     "start_beat": 39.1652,
+     "end_beat": 39.4785,
+     "velocity": 99,
+     "confidence": 0.15,
+     "low_confidence": true
+    },
+    {
+     "pitch": 40,
+     "name": "E2",
+     "start": 20.26,
+     "end": 20.44,
+     "start_beat": 39.4785,
+     "end_beat": 39.8309,
+     "velocity": 97,
+     "confidence": 0.159,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 20.66,
+     "end": 20.77,
+     "start_beat": 40.2615,
+     "end_beat": 40.4768,
+     "velocity": 107,
+     "confidence": 0.12,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 20.77,
+     "end": 21.0,
+     "start_beat": 40.4768,
+     "end_beat": 40.927,
+     "velocity": 103,
+     "confidence": 0.141,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 21.1,
+     "end": 21.26,
+     "start_beat": 41.1286,
+     "end_beat": 41.4567,
+     "velocity": 104,
+     "confidence": 0.101,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 21.26,
+     "end": 21.43,
+     "start_beat": 41.4567,
+     "end_beat": 41.8054,
+     "velocity": 101,
+     "confidence": 0.1,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 21.67,
+     "end": 21.77,
+     "start_beat": 42.2841,
+     "end_beat": 42.4798,
+     "velocity": 103,
+     "confidence": 0.101,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 21.77,
+     "end": 21.99,
+     "start_beat": 42.4798,
+     "end_beat": 42.9105,
+     "velocity": 100,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 22.1,
+     "end": 22.26,
+     "start_beat": 43.1318,
+     "end_beat": 43.4599,
+     "velocity": 102,
+     "confidence": 0.117,
+     "low_confidence": true
+    },
+    {
+     "pitch": 36,
+     "name": "C2",
+     "start": 22.26,
+     "end": 22.44,
+     "start_beat": 43.4599,
+     "end_beat": 43.829,
+     "velocity": 100,
+     "confidence": 0.138,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 22.77,
+     "end": 23.0,
+     "start_beat": 44.4828,
+     "end_beat": 44.933,
+     "velocity": 103,
+     "confidence": 0.153,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 23.1,
+     "end": 23.26,
+     "start_beat": 45.1349,
+     "end_beat": 45.4631,
+     "velocity": 104,
+     "confidence": 0.116,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 23.26,
+     "end": 23.44,
+     "start_beat": 45.4631,
+     "end_beat": 45.8322,
+     "velocity": 101,
+     "confidence": 0.122,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 23.77,
+     "end": 24.0,
+     "start_beat": 46.4858,
+     "end_beat": 46.936,
+     "velocity": 101,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 24.1,
+     "end": 24.28,
+     "start_beat": 47.1317,
+     "end_beat": 47.484,
+     "velocity": 104,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 38,
+     "name": "D2",
+     "start": 24.28,
+     "end": 24.45,
+     "start_beat": 47.484,
+     "end_beat": 47.8168,
+     "velocity": 100,
+     "confidence": 0.153,
+     "low_confidence": true
+    }
+   ]
+  },
+  {
+   "id": "chords",
+   "name": "Chords",
+   "role": "chords",
+   "method": "chord-voicing",
+   "stem": null,
+   "is_drum": false,
+   "program": 0,
+   "midi_track": 2,
+   "midi_channel": 1,
+   "midi_file": "midi/chords.mid",
+   "transpose": 0,
+   "simplified": null,
+   "note_count": 36,
+   "low_confidence_count": 0,
+   "pitch_range": [
+    59,
+    72
+   ],
+   "notes": [
+    {
+     "pitch": 59,
+     "name": "B3",
+     "start": 0.5108,
+     "end": 2.531,
+     "start_beat": 0.0,
+     "end_beat": 4.0,
+     "velocity": 72,
+     "confidence": 0.768,
+     "low_confidence": false
+    },
+    {
+     "pitch": 62,
+     "name": "D4",
+     "start": 0.5108,
+     "end": 2.531,
+     "start_beat": 0.0,
+     "end_beat": 4.0,
+     "velocity": 72,
+     "confidence": 0.768,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 0.5108,
+     "end": 2.531,
+     "start_beat": 0.0,
+     "end_beat": 4.0,
+     "velocity": 72,
+     "confidence": 0.768,
+     "low_confidence": false
+    },
+    {
+     "pitch": 59,
+     "name": "B3",
+     "start": 2.531,
+     "end": 4.5279,
+     "start_beat": 4.0,
+     "end_beat": 8.0,
+     "velocity": 72,
+     "confidence": 0.961,
+     "low_confidence": false
+    },
+    {
+     "pitch": 64,
+     "name": "E4",
+     "start": 2.531,
+     "end": 4.5279,
+     "start_beat": 4.0,
+     "end_beat": 8.0,
+     "velocity": 72,
+     "confidence": 0.961,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 2.531,
+     "end": 4.5279,
+     "start_beat": 4.0,
+     "end_beat": 8.0,
+     "velocity": 72,
+     "confidence": 0.961,
+     "low_confidence": false
+    },
+    {
+     "pitch": 60,
+     "name": "C4",
+     "start": 4.5279,
+     "end": 6.5248,
+     "start_beat": 8.0,
+     "end_beat": 12.0,
+     "velocity": 72,
+     "confidence": 0.879,
+     "low_confidence": false
+    },
+    {
+     "pitch": 64,
+     "name": "E4",
+     "start": 4.5279,
+     "end": 6.5248,
+     "start_beat": 8.0,
+     "end_beat": 12.0,
+     "velocity": 72,
+     "confidence": 0.879,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 4.5279,
+     "end": 6.5248,
+     "start_beat": 8.0,
+     "end_beat": 12.0,
+     "velocity": 72,
+     "confidence": 0.879,
+     "low_confidence": false
+    },
+    {
+     "pitch": 62,
+     "name": "D4",
+     "start": 6.5248,
+     "end": 8.5217,
+     "start_beat": 12.0,
+     "end_beat": 16.0,
+     "velocity": 72,
+     "confidence": 0.881,
+     "low_confidence": false
+    },
+    {
+     "pitch": 66,
+     "name": "F#4",
+     "start": 6.5248,
+     "end": 8.5217,
+     "start_beat": 12.0,
+     "end_beat": 16.0,
+     "velocity": 72,
+     "confidence": 0.881,
+     "low_confidence": false
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 6.5248,
+     "end": 8.5217,
+     "start_beat": 12.0,
+     "end_beat": 16.0,
+     "velocity": 72,
+     "confidence": 0.881,
+     "low_confidence": false
+    },
+    {
+     "pitch": 64,
+     "name": "E4",
+     "start": 8.5217,
+     "end": 10.5186,
+     "start_beat": 16.0,
+     "end_beat": 20.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 8.5217,
+     "end": 10.5186,
+     "start_beat": 16.0,
+     "end_beat": 20.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 71,
+     "name": "B4",
+     "start": 8.5217,
+     "end": 10.5186,
+     "start_beat": 16.0,
+     "end_beat": 20.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 62,
+     "name": "D4",
+     "start": 10.5186,
+     "end": 12.5388,
+     "start_beat": 20.0,
+     "end_beat": 24.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 66,
+     "name": "F#4",
+     "start": 10.5186,
+     "end": 12.5388,
+     "start_beat": 20.0,
+     "end_beat": 24.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 71,
+     "name": "B4",
+     "start": 10.5186,
+     "end": 12.5388,
+     "start_beat": 20.0,
+     "end_beat": 24.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 64,
+     "name": "E4",
+     "start": 12.5388,
+     "end": 14.5357,
+     "start_beat": 24.0,
+     "end_beat": 28.0,
+     "velocity": 72,
+     "confidence": 0.748,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 12.5388,
+     "end": 14.5357,
+     "start_beat": 24.0,
+     "end_beat": 28.0,
+     "velocity": 72,
+     "confidence": 0.748,
+     "low_confidence": false
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 12.5388,
+     "end": 14.5357,
+     "start_beat": 24.0,
+     "end_beat": 28.0,
+     "velocity": 72,
+     "confidence": 0.748,
+     "low_confidence": false
+    },
+    {
+     "pitch": 64,
+     "name": "E4",
+     "start": 14.5357,
+     "end": 16.5326,
+     "start_beat": 28.0,
+     "end_beat": 32.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 14.5357,
+     "end": 16.5326,
+     "start_beat": 28.0,
+     "end_beat": 32.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 14.5357,
+     "end": 16.5326,
+     "start_beat": 28.0,
+     "end_beat": 32.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 62,
+     "name": "D4",
+     "start": 16.5326,
+     "end": 18.5295,
+     "start_beat": 32.0,
+     "end_beat": 36.0,
+     "velocity": 72,
+     "confidence": 0.771,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 16.5326,
+     "end": 18.5295,
+     "start_beat": 32.0,
+     "end_beat": 36.0,
+     "velocity": 72,
+     "confidence": 0.771,
+     "low_confidence": false
+    },
+    {
+     "pitch": 71,
+     "name": "B4",
+     "start": 16.5326,
+     "end": 18.5295,
+     "start_beat": 32.0,
+     "end_beat": 36.0,
+     "velocity": 72,
+     "confidence": 0.771,
+     "low_confidence": false
+    },
+    {
+     "pitch": 64,
+     "name": "E4",
+     "start": 18.5295,
+     "end": 20.5264,
+     "start_beat": 36.0,
+     "end_beat": 40.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 18.5295,
+     "end": 20.5264,
+     "start_beat": 36.0,
+     "end_beat": 40.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 71,
+     "name": "B4",
+     "start": 18.5295,
+     "end": 20.5264,
+     "start_beat": 36.0,
+     "end_beat": 40.0,
+     "velocity": 72,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 64,
+     "name": "E4",
+     "start": 20.5264,
+     "end": 22.5234,
+     "start_beat": 40.0,
+     "end_beat": 44.0,
+     "velocity": 72,
+     "confidence": 0.864,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 20.5264,
+     "end": 22.5234,
+     "start_beat": 40.0,
+     "end_beat": 44.0,
+     "velocity": 72,
+     "confidence": 0.864,
+     "low_confidence": false
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 20.5264,
+     "end": 22.5234,
+     "start_beat": 40.0,
+     "end_beat": 44.0,
+     "velocity": 72,
+     "confidence": 0.864,
+     "low_confidence": false
+    },
+    {
+     "pitch": 62,
+     "name": "D4",
+     "start": 22.5234,
+     "end": 25.5,
+     "start_beat": 44.0,
+     "end_beat": 49.872,
+     "velocity": 72,
+     "confidence": 0.93,
+     "low_confidence": false
+    },
+    {
+     "pitch": 66,
+     "name": "F#4",
+     "start": 22.5234,
+     "end": 25.5,
+     "start_beat": 44.0,
+     "end_beat": 49.872,
+     "velocity": 72,
+     "confidence": 0.93,
+     "low_confidence": false
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 22.5234,
+     "end": 25.5,
+     "start_beat": 44.0,
+     "end_beat": 49.872,
+     "velocity": 72,
+     "confidence": 0.93,
+     "low_confidence": false
+    }
+   ]
+  },
+  {
+   "id": "melody-easy",
+   "name": "Melody (easy)",
+   "role": "melody",
+   "method": "pyin+simplify",
+   "stem": "mix",
+   "is_drum": false,
+   "program": 0,
+   "midi_track": 3,
+   "midi_channel": 2,
+   "midi_file": "midi/melody-easy.mid",
+   "transpose": 5,
+   "simplified": {
+    "difficulty": 2,
+    "transpose": 5,
+    "max_keys": 2,
+    "grid_beats": 0.5,
+    "melody_range": [
+     "C4",
+     "D5"
+    ],
+    "accompaniment": "root_on_change",
+    "accompaniment_range": [
+     "C3",
+     "F#4"
+    ]
+   },
+   "note_count": 59,
+   "low_confidence_count": 59,
+   "pitch_range": [
+    65,
+    72
+   ],
+   "notes": [
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 0.7663,
+     "end": 1.0217,
+     "start_beat": 0.5,
+     "end_beat": 1.0,
+     "velocity": 104,
+     "confidence": 0.177,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 1.0217,
+     "end": 1.2771,
+     "start_beat": 1.0,
+     "end_beat": 1.5,
+     "velocity": 102,
+     "confidence": 0.168,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 1.2771,
+     "end": 1.5325,
+     "start_beat": 1.5,
+     "end_beat": 2.0,
+     "velocity": 99,
+     "confidence": 0.172,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 1.7763,
+     "end": 2.0201,
+     "start_beat": 2.5,
+     "end_beat": 3.0,
+     "velocity": 99,
+     "confidence": 0.149,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 2.0201,
+     "end": 2.2755,
+     "start_beat": 3.0,
+     "end_beat": 3.5,
+     "velocity": 102,
+     "confidence": 0.173,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 2.2755,
+     "end": 2.531,
+     "start_beat": 3.5,
+     "end_beat": 4.0,
+     "velocity": 99,
+     "confidence": 0.188,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 3.0186,
+     "end": 3.274,
+     "start_beat": 5.0,
+     "end_beat": 5.5,
+     "velocity": 105,
+     "confidence": 0.19,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 3.274,
+     "end": 3.5294,
+     "start_beat": 5.5,
+     "end_beat": 6.0,
+     "velocity": 100,
+     "confidence": 0.192,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 3.7732,
+     "end": 4.0171,
+     "start_beat": 6.5,
+     "end_beat": 7.0,
+     "velocity": 99,
+     "confidence": 0.164,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 4.0171,
+     "end": 4.2725,
+     "start_beat": 7.0,
+     "end_beat": 7.5,
+     "velocity": 99,
+     "confidence": 0.154,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 4.2725,
+     "end": 4.5279,
+     "start_beat": 7.5,
+     "end_beat": 8.0,
+     "velocity": 96,
+     "confidence": 0.158,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 4.5279,
+     "end": 4.7717,
+     "start_beat": 8.0,
+     "end_beat": 8.5,
+     "velocity": 107,
+     "confidence": 0.112,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 4.7717,
+     "end": 5.0155,
+     "start_beat": 8.5,
+     "end_beat": 9.0,
+     "velocity": 102,
+     "confidence": 0.128,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.0155,
+     "end": 5.2709,
+     "start_beat": 9.0,
+     "end_beat": 9.5,
+     "velocity": 103,
+     "confidence": 0.106,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.2709,
+     "end": 5.5263,
+     "start_beat": 9.5,
+     "end_beat": 10.0,
+     "velocity": 101,
+     "confidence": 0.119,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.5263,
+     "end": 5.7818,
+     "start_beat": 10.0,
+     "end_beat": 10.5,
+     "velocity": 102,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.7818,
+     "end": 6.0372,
+     "start_beat": 10.5,
+     "end_beat": 11.0,
+     "velocity": 100,
+     "confidence": 0.128,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 6.0372,
+     "end": 6.281,
+     "start_beat": 11.0,
+     "end_beat": 11.5,
+     "velocity": 103,
+     "confidence": 0.124,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 6.281,
+     "end": 6.5248,
+     "start_beat": 11.5,
+     "end_beat": 12.0,
+     "velocity": 101,
+     "confidence": 0.129,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 6.5248,
+     "end": 6.7802,
+     "start_beat": 12.0,
+     "end_beat": 12.5,
+     "velocity": 106,
+     "confidence": 0.121,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 6.7802,
+     "end": 7.0356,
+     "start_beat": 12.5,
+     "end_beat": 13.0,
+     "velocity": 102,
+     "confidence": 0.147,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 7.0356,
+     "end": 7.2794,
+     "start_beat": 13.0,
+     "end_beat": 13.5,
+     "velocity": 104,
+     "confidence": 0.116,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 7.2794,
+     "end": 7.5233,
+     "start_beat": 13.5,
+     "end_beat": 14.0,
+     "velocity": 101,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 7.7787,
+     "end": 8.0341,
+     "start_beat": 14.5,
+     "end_beat": 15.0,
+     "velocity": 99,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 8.0341,
+     "end": 8.2779,
+     "start_beat": 15.0,
+     "end_beat": 15.5,
+     "velocity": 104,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 8.2779,
+     "end": 8.5217,
+     "start_beat": 15.5,
+     "end_beat": 16.0,
+     "velocity": 100,
+     "confidence": 0.158,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 8.7771,
+     "end": 9.0326,
+     "start_beat": 16.5,
+     "end_beat": 17.0,
+     "velocity": 105,
+     "confidence": 0.179,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 9.0326,
+     "end": 9.2764,
+     "start_beat": 17.0,
+     "end_beat": 17.5,
+     "velocity": 104,
+     "confidence": 0.115,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 9.2764,
+     "end": 9.5202,
+     "start_beat": 17.5,
+     "end_beat": 18.0,
+     "velocity": 102,
+     "confidence": 0.129,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 9.7756,
+     "end": 10.031,
+     "start_beat": 18.5,
+     "end_beat": 19.0,
+     "velocity": 100,
+     "confidence": 0.154,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 12.5388,
+     "end": 12.7826,
+     "start_beat": 24.0,
+     "end_beat": 24.5,
+     "velocity": 108,
+     "confidence": 0.102,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 12.7826,
+     "end": 13.0264,
+     "start_beat": 24.5,
+     "end_beat": 25.0,
+     "velocity": 105,
+     "confidence": 0.14,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 13.0264,
+     "end": 13.2818,
+     "start_beat": 25.0,
+     "end_beat": 25.5,
+     "velocity": 103,
+     "confidence": 0.097,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 13.2818,
+     "end": 13.5372,
+     "start_beat": 25.5,
+     "end_beat": 26.0,
+     "velocity": 102,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 13.7811,
+     "end": 14.0249,
+     "start_beat": 26.5,
+     "end_beat": 27.0,
+     "velocity": 101,
+     "confidence": 0.109,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 14.0249,
+     "end": 14.2803,
+     "start_beat": 27.0,
+     "end_beat": 27.5,
+     "velocity": 101,
+     "confidence": 0.101,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 14.2803,
+     "end": 14.5357,
+     "start_beat": 27.5,
+     "end_beat": 28.0,
+     "velocity": 101,
+     "confidence": 0.108,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 16.7764,
+     "end": 17.0202,
+     "start_beat": 32.5,
+     "end_beat": 33.0,
+     "velocity": 102,
+     "confidence": 0.176,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 17.0202,
+     "end": 17.2756,
+     "start_beat": 33.0,
+     "end_beat": 33.5,
+     "velocity": 103,
+     "confidence": 0.171,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 17.2756,
+     "end": 17.5311,
+     "start_beat": 33.5,
+     "end_beat": 34.0,
+     "velocity": 98,
+     "confidence": 0.184,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 17.7749,
+     "end": 18.2741,
+     "start_beat": 34.5,
+     "end_beat": 35.5,
+     "velocity": 99,
+     "confidence": 0.152,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 18.2741,
+     "end": 18.5295,
+     "start_beat": 35.5,
+     "end_beat": 36.0,
+     "velocity": 99,
+     "confidence": 0.181,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 19.0171,
+     "end": 19.2725,
+     "start_beat": 37.0,
+     "end_beat": 37.5,
+     "velocity": 105,
+     "confidence": 0.188,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 19.2725,
+     "end": 19.528,
+     "start_beat": 37.5,
+     "end_beat": 38.0,
+     "velocity": 101,
+     "confidence": 0.197,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 19.7718,
+     "end": 20.0156,
+     "start_beat": 38.5,
+     "end_beat": 39.0,
+     "velocity": 99,
+     "confidence": 0.161,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 20.0156,
+     "end": 20.271,
+     "start_beat": 39.0,
+     "end_beat": 39.5,
+     "velocity": 99,
+     "confidence": 0.15,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 20.271,
+     "end": 20.5264,
+     "start_beat": 39.5,
+     "end_beat": 40.0,
+     "velocity": 97,
+     "confidence": 0.159,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 20.7818,
+     "end": 21.0373,
+     "start_beat": 40.5,
+     "end_beat": 41.0,
+     "velocity": 103,
+     "confidence": 0.141,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 21.0373,
+     "end": 21.2811,
+     "start_beat": 41.0,
+     "end_beat": 41.5,
+     "velocity": 104,
+     "confidence": 0.101,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 21.2811,
+     "end": 21.5249,
+     "start_beat": 41.5,
+     "end_beat": 42.0,
+     "velocity": 101,
+     "confidence": 0.1,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 21.7803,
+     "end": 22.0357,
+     "start_beat": 42.5,
+     "end_beat": 43.0,
+     "velocity": 100,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 22.0357,
+     "end": 22.2796,
+     "start_beat": 43.0,
+     "end_beat": 43.5,
+     "velocity": 102,
+     "confidence": 0.117,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 22.2796,
+     "end": 22.5234,
+     "start_beat": 43.5,
+     "end_beat": 44.0,
+     "velocity": 100,
+     "confidence": 0.138,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 22.7788,
+     "end": 23.0342,
+     "start_beat": 44.5,
+     "end_beat": 45.0,
+     "velocity": 103,
+     "confidence": 0.153,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 23.0342,
+     "end": 23.278,
+     "start_beat": 45.0,
+     "end_beat": 45.5,
+     "velocity": 104,
+     "confidence": 0.116,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 23.278,
+     "end": 23.5218,
+     "start_beat": 45.5,
+     "end_beat": 46.0,
+     "velocity": 101,
+     "confidence": 0.122,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 23.7772,
+     "end": 24.0327,
+     "start_beat": 46.5,
+     "end_beat": 47.0,
+     "velocity": 101,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 24.0327,
+     "end": 24.2881,
+     "start_beat": 47.0,
+     "end_beat": 47.5,
+     "velocity": 104,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 24.2881,
+     "end": 24.5436,
+     "start_beat": 47.5,
+     "end_beat": 48.0,
+     "velocity": 100,
+     "confidence": 0.153,
+     "low_confidence": true
+    }
+   ]
+  },
+  {
+   "id": "chords-easy",
+   "name": "Left hand (easy)",
+   "role": "chords",
+   "method": "chords+simplify",
+   "stem": null,
+   "is_drum": false,
+   "program": 0,
+   "midi_track": 4,
+   "midi_channel": 3,
+   "midi_file": "midi/chords-easy.mid",
+   "transpose": 5,
+   "simplified": {
+    "difficulty": 2,
+    "transpose": 5,
+    "max_keys": 2,
+    "grid_beats": 0.5,
+    "melody_range": [
+     "C4",
+     "D5"
+    ],
+    "accompaniment": "root_on_change",
+    "accompaniment_range": [
+     "C3",
+     "F#4"
+    ]
+   },
+   "note_count": 12,
+   "low_confidence_count": 0,
+   "pitch_range": [
+    48,
+    57
+   ],
+   "notes": [
+    {
+     "pitch": 48,
+     "name": "C3",
+     "start": 0.5108,
+     "end": 2.531,
+     "start_beat": 0.0,
+     "end_beat": 4.0,
+     "velocity": 70,
+     "confidence": 0.768,
+     "low_confidence": false
+    },
+    {
+     "pitch": 57,
+     "name": "A3",
+     "start": 2.531,
+     "end": 4.5279,
+     "start_beat": 4.0,
+     "end_beat": 8.0,
+     "velocity": 70,
+     "confidence": 0.961,
+     "low_confidence": false
+    },
+    {
+     "pitch": 53,
+     "name": "F3",
+     "start": 4.5279,
+     "end": 6.5248,
+     "start_beat": 8.0,
+     "end_beat": 12.0,
+     "velocity": 70,
+     "confidence": 0.879,
+     "low_confidence": false
+    },
+    {
+     "pitch": 55,
+     "name": "G3",
+     "start": 6.5248,
+     "end": 8.5217,
+     "start_beat": 12.0,
+     "end_beat": 16.0,
+     "velocity": 70,
+     "confidence": 0.881,
+     "low_confidence": false
+    },
+    {
+     "pitch": 57,
+     "name": "A3",
+     "start": 8.5217,
+     "end": 10.5186,
+     "start_beat": 16.0,
+     "end_beat": 20.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 52,
+     "name": "E3",
+     "start": 10.5186,
+     "end": 12.5388,
+     "start_beat": 20.0,
+     "end_beat": 24.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 53,
+     "name": "F3",
+     "start": 12.5388,
+     "end": 14.5357,
+     "start_beat": 24.0,
+     "end_beat": 28.0,
+     "velocity": 70,
+     "confidence": 0.748,
+     "low_confidence": false
+    },
+    {
+     "pitch": 50,
+     "name": "D3",
+     "start": 14.5357,
+     "end": 16.5326,
+     "start_beat": 28.0,
+     "end_beat": 32.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 48,
+     "name": "C3",
+     "start": 16.5326,
+     "end": 18.5295,
+     "start_beat": 32.0,
+     "end_beat": 36.0,
+     "velocity": 70,
+     "confidence": 0.771,
+     "low_confidence": false
+    },
+    {
+     "pitch": 57,
+     "name": "A3",
+     "start": 18.5295,
+     "end": 20.5264,
+     "start_beat": 36.0,
+     "end_beat": 40.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 53,
+     "name": "F3",
+     "start": 20.5264,
+     "end": 22.5234,
+     "start_beat": 40.0,
+     "end_beat": 44.0,
+     "velocity": 70,
+     "confidence": 0.864,
+     "low_confidence": false
+    },
+    {
+     "pitch": 55,
+     "name": "G3",
+     "start": 22.5234,
+     "end": 25.5654,
+     "start_beat": 44.0,
+     "end_beat": 50.0,
+     "velocity": 70,
+     "confidence": 0.93,
+     "low_confidence": false
+    }
+   ]
+  },
+  {
+   "id": "arrangement",
+   "name": "Easy arrangement",
+   "role": "arrangement",
+   "method": "simplify",
+   "stem": null,
+   "is_drum": false,
+   "program": 0,
+   "midi_track": 5,
+   "midi_channel": 4,
+   "midi_file": "midi/arrangement.mid",
+   "transpose": 5,
+   "simplified": {
+    "difficulty": 2,
+    "transpose": 5,
+    "max_keys": 2,
+    "grid_beats": 0.5,
+    "melody_range": [
+     "C4",
+     "D5"
+    ],
+    "accompaniment": "root_on_change",
+    "accompaniment_range": [
+     "C3",
+     "F#4"
+    ]
+   },
+   "note_count": 71,
+   "low_confidence_count": 59,
+   "pitch_range": [
+    48,
+    72
+   ],
+   "notes": [
+    {
+     "pitch": 48,
+     "name": "C3",
+     "start": 0.5108,
+     "end": 2.531,
+     "start_beat": 0.0,
+     "end_beat": 4.0,
+     "velocity": 70,
+     "confidence": 0.768,
+     "low_confidence": false
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 0.7663,
+     "end": 1.0217,
+     "start_beat": 0.5,
+     "end_beat": 1.0,
+     "velocity": 104,
+     "confidence": 0.177,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 1.0217,
+     "end": 1.2771,
+     "start_beat": 1.0,
+     "end_beat": 1.5,
+     "velocity": 102,
+     "confidence": 0.168,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 1.2771,
+     "end": 1.5325,
+     "start_beat": 1.5,
+     "end_beat": 2.0,
+     "velocity": 99,
+     "confidence": 0.172,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 1.7763,
+     "end": 2.0201,
+     "start_beat": 2.5,
+     "end_beat": 3.0,
+     "velocity": 99,
+     "confidence": 0.149,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 2.0201,
+     "end": 2.2755,
+     "start_beat": 3.0,
+     "end_beat": 3.5,
+     "velocity": 102,
+     "confidence": 0.173,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 2.2755,
+     "end": 2.531,
+     "start_beat": 3.5,
+     "end_beat": 4.0,
+     "velocity": 99,
+     "confidence": 0.188,
+     "low_confidence": true
+    },
+    {
+     "pitch": 57,
+     "name": "A3",
+     "start": 2.531,
+     "end": 4.5279,
+     "start_beat": 4.0,
+     "end_beat": 8.0,
+     "velocity": 70,
+     "confidence": 0.961,
+     "low_confidence": false
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 3.0186,
+     "end": 3.274,
+     "start_beat": 5.0,
+     "end_beat": 5.5,
+     "velocity": 105,
+     "confidence": 0.19,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 3.274,
+     "end": 3.5294,
+     "start_beat": 5.5,
+     "end_beat": 6.0,
+     "velocity": 100,
+     "confidence": 0.192,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 3.7732,
+     "end": 4.0171,
+     "start_beat": 6.5,
+     "end_beat": 7.0,
+     "velocity": 99,
+     "confidence": 0.164,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 4.0171,
+     "end": 4.2725,
+     "start_beat": 7.0,
+     "end_beat": 7.5,
+     "velocity": 99,
+     "confidence": 0.154,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 4.2725,
+     "end": 4.5279,
+     "start_beat": 7.5,
+     "end_beat": 8.0,
+     "velocity": 96,
+     "confidence": 0.158,
+     "low_confidence": true
+    },
+    {
+     "pitch": 53,
+     "name": "F3",
+     "start": 4.5279,
+     "end": 6.5248,
+     "start_beat": 8.0,
+     "end_beat": 12.0,
+     "velocity": 70,
+     "confidence": 0.879,
+     "low_confidence": false
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 4.5279,
+     "end": 4.7717,
+     "start_beat": 8.0,
+     "end_beat": 8.5,
+     "velocity": 107,
+     "confidence": 0.112,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 4.7717,
+     "end": 5.0155,
+     "start_beat": 8.5,
+     "end_beat": 9.0,
+     "velocity": 102,
+     "confidence": 0.128,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.0155,
+     "end": 5.2709,
+     "start_beat": 9.0,
+     "end_beat": 9.5,
+     "velocity": 103,
+     "confidence": 0.106,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.2709,
+     "end": 5.5263,
+     "start_beat": 9.5,
+     "end_beat": 10.0,
+     "velocity": 101,
+     "confidence": 0.119,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.5263,
+     "end": 5.7818,
+     "start_beat": 10.0,
+     "end_beat": 10.5,
+     "velocity": 102,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 5.7818,
+     "end": 6.0372,
+     "start_beat": 10.5,
+     "end_beat": 11.0,
+     "velocity": 100,
+     "confidence": 0.128,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 6.0372,
+     "end": 6.281,
+     "start_beat": 11.0,
+     "end_beat": 11.5,
+     "velocity": 103,
+     "confidence": 0.124,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 6.281,
+     "end": 6.5248,
+     "start_beat": 11.5,
+     "end_beat": 12.0,
+     "velocity": 101,
+     "confidence": 0.129,
+     "low_confidence": true
+    },
+    {
+     "pitch": 55,
+     "name": "G3",
+     "start": 6.5248,
+     "end": 8.5217,
+     "start_beat": 12.0,
+     "end_beat": 16.0,
+     "velocity": 70,
+     "confidence": 0.881,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 6.5248,
+     "end": 6.7802,
+     "start_beat": 12.0,
+     "end_beat": 12.5,
+     "velocity": 106,
+     "confidence": 0.121,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 6.7802,
+     "end": 7.0356,
+     "start_beat": 12.5,
+     "end_beat": 13.0,
+     "velocity": 102,
+     "confidence": 0.147,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 7.0356,
+     "end": 7.2794,
+     "start_beat": 13.0,
+     "end_beat": 13.5,
+     "velocity": 104,
+     "confidence": 0.116,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 7.2794,
+     "end": 7.5233,
+     "start_beat": 13.5,
+     "end_beat": 14.0,
+     "velocity": 101,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 7.7787,
+     "end": 8.0341,
+     "start_beat": 14.5,
+     "end_beat": 15.0,
+     "velocity": 99,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 8.0341,
+     "end": 8.2779,
+     "start_beat": 15.0,
+     "end_beat": 15.5,
+     "velocity": 104,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 8.2779,
+     "end": 8.5217,
+     "start_beat": 15.5,
+     "end_beat": 16.0,
+     "velocity": 100,
+     "confidence": 0.158,
+     "low_confidence": true
+    },
+    {
+     "pitch": 57,
+     "name": "A3",
+     "start": 8.5217,
+     "end": 10.5186,
+     "start_beat": 16.0,
+     "end_beat": 20.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 8.7771,
+     "end": 9.0326,
+     "start_beat": 16.5,
+     "end_beat": 17.0,
+     "velocity": 105,
+     "confidence": 0.179,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 9.0326,
+     "end": 9.2764,
+     "start_beat": 17.0,
+     "end_beat": 17.5,
+     "velocity": 104,
+     "confidence": 0.115,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 9.2764,
+     "end": 9.5202,
+     "start_beat": 17.5,
+     "end_beat": 18.0,
+     "velocity": 102,
+     "confidence": 0.129,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 9.7756,
+     "end": 10.031,
+     "start_beat": 18.5,
+     "end_beat": 19.0,
+     "velocity": 100,
+     "confidence": 0.154,
+     "low_confidence": true
+    },
+    {
+     "pitch": 52,
+     "name": "E3",
+     "start": 10.5186,
+     "end": 12.5388,
+     "start_beat": 20.0,
+     "end_beat": 24.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 53,
+     "name": "F3",
+     "start": 12.5388,
+     "end": 14.5357,
+     "start_beat": 24.0,
+     "end_beat": 28.0,
+     "velocity": 70,
+     "confidence": 0.748,
+     "low_confidence": false
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 12.5388,
+     "end": 12.7826,
+     "start_beat": 24.0,
+     "end_beat": 24.5,
+     "velocity": 108,
+     "confidence": 0.102,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 12.7826,
+     "end": 13.0264,
+     "start_beat": 24.5,
+     "end_beat": 25.0,
+     "velocity": 105,
+     "confidence": 0.14,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 13.0264,
+     "end": 13.2818,
+     "start_beat": 25.0,
+     "end_beat": 25.5,
+     "velocity": 103,
+     "confidence": 0.097,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 13.2818,
+     "end": 13.5372,
+     "start_beat": 25.5,
+     "end_beat": 26.0,
+     "velocity": 102,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 13.7811,
+     "end": 14.0249,
+     "start_beat": 26.5,
+     "end_beat": 27.0,
+     "velocity": 101,
+     "confidence": 0.109,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 14.0249,
+     "end": 14.2803,
+     "start_beat": 27.0,
+     "end_beat": 27.5,
+     "velocity": 101,
+     "confidence": 0.101,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 14.2803,
+     "end": 14.5357,
+     "start_beat": 27.5,
+     "end_beat": 28.0,
+     "velocity": 101,
+     "confidence": 0.108,
+     "low_confidence": true
+    },
+    {
+     "pitch": 50,
+     "name": "D3",
+     "start": 14.5357,
+     "end": 16.5326,
+     "start_beat": 28.0,
+     "end_beat": 32.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 48,
+     "name": "C3",
+     "start": 16.5326,
+     "end": 18.5295,
+     "start_beat": 32.0,
+     "end_beat": 36.0,
+     "velocity": 70,
+     "confidence": 0.771,
+     "low_confidence": false
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 16.7764,
+     "end": 17.0202,
+     "start_beat": 32.5,
+     "end_beat": 33.0,
+     "velocity": 102,
+     "confidence": 0.176,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 17.0202,
+     "end": 17.2756,
+     "start_beat": 33.0,
+     "end_beat": 33.5,
+     "velocity": 103,
+     "confidence": 0.171,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 17.2756,
+     "end": 17.5311,
+     "start_beat": 33.5,
+     "end_beat": 34.0,
+     "velocity": 98,
+     "confidence": 0.184,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 17.7749,
+     "end": 18.2741,
+     "start_beat": 34.5,
+     "end_beat": 35.5,
+     "velocity": 99,
+     "confidence": 0.152,
+     "low_confidence": true
+    },
+    {
+     "pitch": 72,
+     "name": "C5",
+     "start": 18.2741,
+     "end": 18.5295,
+     "start_beat": 35.5,
+     "end_beat": 36.0,
+     "velocity": 99,
+     "confidence": 0.181,
+     "low_confidence": true
+    },
+    {
+     "pitch": 57,
+     "name": "A3",
+     "start": 18.5295,
+     "end": 20.5264,
+     "start_beat": 36.0,
+     "end_beat": 40.0,
+     "velocity": 70,
+     "confidence": 1.0,
+     "low_confidence": false
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 19.0171,
+     "end": 19.2725,
+     "start_beat": 37.0,
+     "end_beat": 37.5,
+     "velocity": 105,
+     "confidence": 0.188,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 19.2725,
+     "end": 19.528,
+     "start_beat": 37.5,
+     "end_beat": 38.0,
+     "velocity": 101,
+     "confidence": 0.197,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 19.7718,
+     "end": 20.0156,
+     "start_beat": 38.5,
+     "end_beat": 39.0,
+     "velocity": 99,
+     "confidence": 0.161,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 20.0156,
+     "end": 20.271,
+     "start_beat": 39.0,
+     "end_beat": 39.5,
+     "velocity": 99,
+     "confidence": 0.15,
+     "low_confidence": true
+    },
+    {
+     "pitch": 69,
+     "name": "A4",
+     "start": 20.271,
+     "end": 20.5264,
+     "start_beat": 39.5,
+     "end_beat": 40.0,
+     "velocity": 97,
+     "confidence": 0.159,
+     "low_confidence": true
+    },
+    {
+     "pitch": 53,
+     "name": "F3",
+     "start": 20.5264,
+     "end": 22.5234,
+     "start_beat": 40.0,
+     "end_beat": 44.0,
+     "velocity": 70,
+     "confidence": 0.864,
+     "low_confidence": false
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 20.7818,
+     "end": 21.0373,
+     "start_beat": 40.5,
+     "end_beat": 41.0,
+     "velocity": 103,
+     "confidence": 0.141,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 21.0373,
+     "end": 21.2811,
+     "start_beat": 41.0,
+     "end_beat": 41.5,
+     "velocity": 104,
+     "confidence": 0.101,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 21.2811,
+     "end": 21.5249,
+     "start_beat": 41.5,
+     "end_beat": 42.0,
+     "velocity": 101,
+     "confidence": 0.1,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 21.7803,
+     "end": 22.0357,
+     "start_beat": 42.5,
+     "end_beat": 43.0,
+     "velocity": 100,
+     "confidence": 0.111,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 22.0357,
+     "end": 22.2796,
+     "start_beat": 43.0,
+     "end_beat": 43.5,
+     "velocity": 102,
+     "confidence": 0.117,
+     "low_confidence": true
+    },
+    {
+     "pitch": 65,
+     "name": "F4",
+     "start": 22.2796,
+     "end": 22.5234,
+     "start_beat": 43.5,
+     "end_beat": 44.0,
+     "velocity": 100,
+     "confidence": 0.138,
+     "low_confidence": true
+    },
+    {
+     "pitch": 55,
+     "name": "G3",
+     "start": 22.5234,
+     "end": 25.5654,
+     "start_beat": 44.0,
+     "end_beat": 50.0,
+     "velocity": 70,
+     "confidence": 0.93,
+     "low_confidence": false
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 22.7788,
+     "end": 23.0342,
+     "start_beat": 44.5,
+     "end_beat": 45.0,
+     "velocity": 103,
+     "confidence": 0.153,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 23.0342,
+     "end": 23.278,
+     "start_beat": 45.0,
+     "end_beat": 45.5,
+     "velocity": 104,
+     "confidence": 0.116,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 23.278,
+     "end": 23.5218,
+     "start_beat": 45.5,
+     "end_beat": 46.0,
+     "velocity": 101,
+     "confidence": 0.122,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 23.7772,
+     "end": 24.0327,
+     "start_beat": 46.5,
+     "end_beat": 47.0,
+     "velocity": 101,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 24.0327,
+     "end": 24.2881,
+     "start_beat": 47.0,
+     "end_beat": 47.5,
+     "velocity": 104,
+     "confidence": 0.134,
+     "low_confidence": true
+    },
+    {
+     "pitch": 67,
+     "name": "G4",
+     "start": 24.2881,
+     "end": 24.5436,
+     "start_beat": 47.5,
+     "end_beat": 48.0,
+     "velocity": 100,
+     "confidence": 0.153,
+     "low_confidence": true
+    }
+   ]
+  }
+ ],
+ "simplified": {
+  "difficulty": 2,
+  "transpose": 5,
+  "max_keys": 2,
+  "grid_beats": 0.5,
+  "melody_range": [
+   "C4",
+   "D5"
+  ],
+  "accompaniment": "root_on_change",
+  "accompaniment_range": [
+   "C3",
+   "F#4"
+  ],
+  "key": {
+   "tonic": "C",
+   "tonic_pc": 0,
+   "mode": "major",
+   "name": "C major",
+   "confidence": 0.515,
+   "alternatives": []
+  },
+  "chords": [
+   {
+    "start": 0.0,
+    "end": 0.5108,
+    "start_beat": -0.9998,
+    "end_beat": 0.0,
+    "symbol": "N",
+    "root": null,
+    "quality": null,
+    "bass": null,
+    "pitch_classes": [],
+    "roman": null,
+    "diatonic": null,
+    "confidence": 1.0,
+    "low_confidence": false
+   },
+   {
+    "start": 0.5108,
+    "end": 2.531,
+    "start_beat": 0.0,
+    "end_beat": 4.0,
+    "symbol": "C",
+    "root": "C",
+    "quality": "maj",
+    "bass": null,
+    "pitch_classes": [
+     0,
+     4,
+     7
+    ],
+    "roman": "I",
+    "diatonic": true,
+    "confidence": 0.768,
+    "low_confidence": false
+   },
+   {
+    "start": 2.531,
+    "end": 4.5279,
+    "start_beat": 4.0,
+    "end_beat": 8.0,
+    "symbol": "Am",
+    "root": "A",
+    "quality": "min",
+    "bass": null,
+    "pitch_classes": [
+     9,
+     0,
+     4
+    ],
+    "roman": "vi",
+    "diatonic": true,
+    "confidence": 0.961,
+    "low_confidence": false
+   },
+   {
+    "start": 4.5279,
+    "end": 6.5248,
+    "start_beat": 8.0,
+    "end_beat": 12.0,
+    "symbol": "F",
+    "root": "F",
+    "quality": "maj",
+    "bass": null,
+    "pitch_classes": [
+     5,
+     9,
+     0
+    ],
+    "roman": "IV",
+    "diatonic": true,
+    "confidence": 0.879,
+    "low_confidence": false
+   },
+   {
+    "start": 6.5248,
+    "end": 8.5217,
+    "start_beat": 12.0,
+    "end_beat": 16.0,
+    "symbol": "G",
+    "root": "G",
+    "quality": "maj",
+    "bass": null,
+    "pitch_classes": [
+     7,
+     11,
+     2
+    ],
+    "roman": "V",
+    "diatonic": true,
+    "confidence": 0.881,
+    "low_confidence": false
+   },
+   {
+    "start": 8.5217,
+    "end": 10.5186,
+    "start_beat": 16.0,
+    "end_beat": 20.0,
+    "symbol": "Am",
+    "root": "A",
+    "quality": "min",
+    "bass": null,
+    "pitch_classes": [
+     9,
+     0,
+     4
+    ],
+    "roman": "vi",
+    "diatonic": true,
+    "confidence": 1.0,
+    "low_confidence": false
+   },
+   {
+    "start": 10.5186,
+    "end": 12.5388,
+    "start_beat": 20.0,
+    "end_beat": 24.0,
+    "symbol": "Em",
+    "root": "E",
+    "quality": "min",
+    "bass": null,
+    "pitch_classes": [
+     4,
+     7,
+     11
+    ],
+    "roman": "iii",
+    "diatonic": true,
+    "confidence": 1.0,
+    "low_confidence": false
+   },
+   {
+    "start": 12.5388,
+    "end": 14.5357,
+    "start_beat": 24.0,
+    "end_beat": 28.0,
+    "symbol": "F",
+    "root": "F",
+    "quality": "maj",
+    "bass": null,
+    "pitch_classes": [
+     5,
+     9,
+     0
+    ],
+    "roman": "IV",
+    "diatonic": true,
+    "confidence": 0.748,
+    "low_confidence": false
+   },
+   {
+    "start": 14.5357,
+    "end": 16.5326,
+    "start_beat": 28.0,
+    "end_beat": 32.0,
+    "symbol": "Dm",
+    "root": "D",
+    "quality": "min",
+    "bass": null,
+    "pitch_classes": [
+     2,
+     5,
+     9
+    ],
+    "roman": "ii",
+    "diatonic": true,
+    "confidence": 1.0,
+    "low_confidence": false
+   },
+   {
+    "start": 16.5326,
+    "end": 18.5295,
+    "start_beat": 32.0,
+    "end_beat": 36.0,
+    "symbol": "C",
+    "root": "C",
+    "quality": "maj",
+    "bass": null,
+    "pitch_classes": [
+     0,
+     4,
+     7
+    ],
+    "roman": "I",
+    "diatonic": true,
+    "confidence": 0.771,
+    "low_confidence": false
+   },
+   {
+    "start": 18.5295,
+    "end": 20.5264,
+    "start_beat": 36.0,
+    "end_beat": 40.0,
+    "symbol": "Am",
+    "root": "A",
+    "quality": "min",
+    "bass": null,
+    "pitch_classes": [
+     9,
+     0,
+     4
+    ],
+    "roman": "vi",
+    "diatonic": true,
+    "confidence": 1.0,
+    "low_confidence": false
+   },
+   {
+    "start": 20.5264,
+    "end": 22.5234,
+    "start_beat": 40.0,
+    "end_beat": 44.0,
+    "symbol": "F",
+    "root": "F",
+    "quality": "maj",
+    "bass": null,
+    "pitch_classes": [
+     5,
+     9,
+     0
+    ],
+    "roman": "IV",
+    "diatonic": true,
+    "confidence": 0.864,
+    "low_confidence": false
+   },
+   {
+    "start": 22.5234,
+    "end": 25.5,
+    "start_beat": 44.0,
+    "end_beat": 49.872,
+    "symbol": "G",
+    "root": "G",
+    "quality": "maj",
+    "bass": null,
+    "pitch_classes": [
+     7,
+     11,
+     2
+    ],
+    "roman": "V",
+    "diatonic": true,
+    "confidence": 0.93,
+    "low_confidence": false
+   }
+  ],
+  "parts": [
+   "melody-easy",
+   "chords-easy",
+   "arrangement"
+  ]
+ }
+}
