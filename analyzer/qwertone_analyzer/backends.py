@@ -104,4 +104,25 @@ def status() -> dict[str, str]:
         out["piano model"] = "ok" if ck.exists() else "installed, weights download on first use (~165 MB)"
     else:
         out["piano model"] = "missing -> piano mode uses Basic Pitch instead"
+    import importlib.util
+    out["lyrics"] = "local .lrc, file tags, LRCLIB (online)"
+    out["aksharamukha (romanise)"] = "ok (Tamil, Telugu, Hindi, Kannada, Malayalam ...)" if has("aksharamukha") else \
+        "missing -> no romanised lines (pip install aksharamukha)"
+    if has("faster_whisper"):
+        from . import asr
+        cached = any(asr.whisper_dir().glob(f"models--*{asr.DEFAULT_MODEL}*"))
+        out["faster-whisper (lyrics)"] = "ok" + ("" if cached else
+                                                 f", {asr.DEFAULT_MODEL} downloads on first use (~1.6 GB)")
+    else:
+        out["faster-whisper (lyrics)"] = "missing -> no transcription / alignment (setup.sh without --light)"
+    if has("ctranslate2") and has("sentencepiece") and has("huggingface_hub"):
+        from . import translate
+        cached = any(translate.translate_dir().glob("models--*nllb*"))
+        out["translator (English)"] = "ok" + ("" if cached else ", NLLB-200 downloads on first use (~650 MB)")
+    else:
+        out["translator (English)"] = "missing -> no English translation (setup.sh without --light)"
+    out["fpcalc (AcoustID)"] = "ok" if shutil.which("fpcalc") else \
+        "missing -> untagged files can't be identified (sudo pacman -S chromaprint)"
+    out["mutagen (SYLT)"] = "ok" if importlib.util.find_spec("mutagen") else \
+        "missing -> synced ID3 SYLT lyrics are skipped (plain tag lyrics still work)"
     return out

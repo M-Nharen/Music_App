@@ -15,6 +15,8 @@ dependencies = [
     "soundfile>=0.12",
     "mido>=1.3",
     "pretty_midi>=0.2.10",
+    "mutagen>=1.45",   # synced lyrics in ID3 tags (SYLT); optional at runtime
+    "aksharamukha>=2.2",  # romanised lyrics for Tamil, Telugu, Hindi and other Indic scripts
 ]
 
 [project.optional-dependencies]
@@ -34,6 +36,18 @@ models = [
     "resampy>=0.2.2,<0.4.3",
     "scikit-learn",
     "setuptools<81",  # resampy 0.4.2 still imports pkg_resources
+    # lyrics: Whisper transcription / alignment and offline translation (no torch needed)
+    "faster-whisper>=1.1",
+    "ctranslate2>=4.4",
+    "sentencepiece>=0.2",
+    "huggingface_hub>=0.23",
+]
+# just the lyrics models, without the music models (pip install -e ".[lyrics]")
+lyrics = [
+    "faster-whisper>=1.1",
+    "ctranslate2>=4.4",
+    "sentencepiece>=0.2",
+    "huggingface_hub>=0.23",
 ]
 dev = ["pytest>=7", "jsonschema>=4"]
 
@@ -47,5 +61,6 @@ packages = ["qwertone_analyzer"]
 testpaths = ["tests"]
 markers = [
     "models: needs the ML engines (torch, torchcrepe, basic-pitch, demucs)",
+    "lyrics_models: needs real Whisper / NLLB weights (downloads them; off unless QWERTONE_TEST_LYRICS_MODELS=1)",
 ]
 filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning", "ignore::FutureWarning"]

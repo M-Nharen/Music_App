@@ -19,6 +19,9 @@ from .writer import default_songs_dir, part_id, slugify, write_song
 
 MODES = ("chords", "melody", "chords+melody", "full", "instrument", "simplified")
 INSTRUMENTS = ("bass", "piano", "drums")
+# options that don't change song.json (the lyrics step has its own file and fingerprint)
+NOT_IN_FINGERPRINT = ("out_dir", "cache_dir", "use_cache", "force", "lyrics", "lyrics_online", "lyrics_models",
+                      "lyrics_language", "whisper_model", "translate", "acoustid", "acoustid_key")
 MODE_ALIASES = {"chords-melody": "chords+melody", "chords_melody": "chords+melody", "simple": "simplified",
                 "easy": "simplified", "transcribe": "full"}
 
@@ -43,6 +46,14 @@ class Options:
     cache_dir: str | None = None
     use_cache: bool = True
     force: bool = False
+    lyrics: bool = True                    # run the lyrics step after writing song.json
+    lyrics_online: bool = True             # let the lyrics step ask LRCLIB / AcoustID and download models
+    lyrics_models: bool = True             # False = --light: no Whisper / alignment / translation
+    lyrics_language: str | None = None     # song language for the lyrics step (ta, te, hi ...); default: detect
+    whisper_model: str = "auto"            # auto = large-v3-turbo
+    translate: bool = True                 # English machine translation of the lyrics
+    acoustid: str = "auto"                 # auto | always | never
+    acoustid_key: str | None = None
 
     def normalized(self) -> "Options":
         o = Options(**asdict(self))
@@ -61,7 +72,7 @@ class Options:
     def fingerprint(self) -> str:
         """Everything that changes the song folder (not cache/out/force)."""
         d = asdict(self)
-        for k in ("out_dir", "cache_dir", "use_cache", "force"):
+        for k in NOT_IN_FINGERPRINT:
             d.pop(k)
         # a newer analyzer (or any changed stage) must redo old songs
         from . import __version__, midi_input, writer
@@ -78,6 +89,7 @@ class Result:
     skipped: bool = False
     cache_hits: list[str] = field(default_factory=list)
     cache_misses: list[str] = field(default_factory=list)
+    lyrics: object | None = None           # lyrics.LyricsResult when the lyrics step ran
 
 
 # ============================================================================ entry
@@ -106,8 +118,9 @@ def analyze(path: str | Path, opts: Options | None = None) -> Result:
                 old = json.load(f)
             if old.get("source", {}).get("sha256") == sha and old.get("analyzer", {}).get("fingerprint") == fp:
                 log("done", f"already analysed with these settings: {song_dir}")
+                res = Result(song_dir, existing, skipped=True, lyrics=_lyrics_step(song_dir, opts))
                 event("done", song_dir=str(song_dir), skipped=True)
-                return Result(song_dir, existing, skipped=True)
+                return res
         except (OSError, json.JSONDecodeError):
             pass
 
@@ -115,7 +128,7 @@ def analyze(path: str | Path, opts: Options | None = None) -> Result:
                   sha, enabled=opts.use_cache, refresh=opts.force)
     analyzer_info = {"mode": opts.mode, "instrument": opts.instrument, "options": asdict(opts),
                      "fingerprint": fp, "models": {}}
-    for k in ("out_dir", "cache_dir", "use_cache", "force"):
+    for k in NOT_IN_FINGERPRINT:
         analyzer_info["options"].pop(k)
 
     if ext in MIDI_EXTS:
@@ -144,9 +157,25 @@ def analyze(path: str | Path, opts: Options | None = None) -> Result:
                            rhythm=res["rhythm"], tl=res["timeline"], key=res["key"], chords=res["chords"],
                            sections=res["sections"], parts=parts, stems=res["stems"],
                            low_conf=opts.low_confidence, simplified=simplified)
+    lyr = _lyrics_step(song_dir, opts)
     log("done", str(song_dir))
     event("done", song_dir=str(song_dir), skipped=False)
-    return Result(song_dir, song_json, False, cache.hits, cache.misses)
+    return Result(song_dir, song_json, False, cache.hits, cache.misses, lyr)
+
+
+def _lyrics_step(song_dir: Path, opts: Options):
+    """lyrics.json next to song.json. Never fails the analysis."""
+    if not opts.lyrics:
+        return None
+    from . import lyrics
+    try:
+        return lyrics.run_lyrics(song_dir, lyrics.LyricsOptions(
+            online=opts.lyrics_online, cache_dir=opts.cache_dir, use_cache=opts.use_cache,
+            models=opts.lyrics_models, language=opts.lyrics_language, whisper_model=opts.whisper_model,
+            device=opts.device, translate=opts.translate, acoustid=opts.acoustid, acoustid_key=opts.acoustid_key))
+    except Exception as e:  # noqa: BLE001 - lyrics are a bonus; the song folder is already written
+        log("lyrics", f"skipped: {e}")
+        return None
 
 
 # ============================================================================ audio
