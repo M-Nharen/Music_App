@@ -94,6 +94,10 @@ pub struct Config {
 
     // ---- Song mode + live listen (Part 5).
     pub song: SongSettings,
+
+    // ---- Metronome + recording (Part 4a).
+    /// Beats of clicks before a recording starts (0 = none).
+    pub count_in_beats: u32,
 }
 
 /// Song mode and live listen settings, plus best scores.
@@ -214,6 +218,7 @@ impl Default for Config {
             visual: "auto".into(),
             learn: LearnProgress::default(),
             song: SongSettings::default(),
+            count_in_beats: 4,
         }
     }
 }
@@ -285,7 +290,10 @@ pub fn load_keymap(name: &str) -> (Keymap, Vec<String>) {
         Ok(text) => match Keymap::from_toml(&text) {
             Ok((mut km, w)) => {
                 // Layouts saved by Part 1 predate the "next layout" key.
-                if !text.contains("layout+") && km.ensure_layout_key() {
+                let mut changed = !text.contains("layout+") && km.ensure_layout_key();
+                // ... and the Part 4a metronome / record keys.
+                changed |= !text.contains("metronome") && km.ensure_record_keys();
+                if changed {
                     let _ = write_atomic(&path, &km.to_toml());
                 }
                 (km, w)

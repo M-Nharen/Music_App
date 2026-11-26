@@ -5,6 +5,7 @@ mod keybinds;
 mod learn;
 mod listen;
 mod play;
+mod record;
 mod song;
 
 use crate::audio::patterns::Pattern;
@@ -116,6 +117,7 @@ pub struct QwertoneApp {
 
     // Latency test.
     tap: TapTest,
+    rec: record::RecordUi,
     tap_result: Option<TapResult>,
 
     // Keyboard ghosting test.
@@ -194,6 +196,7 @@ impl QwertoneApp {
             confirm_remove: None,
             rename_focus: false,
             tap: TapTest::default(),
+            rec: record::RecordUi::default(),
             tap_result: None,
             max_held: 0,
             best_combo: Vec::new(),
@@ -784,6 +787,9 @@ impl QwertoneApp {
                 });
             }
             Action::LayoutNext => self.next_layout(),
+            Action::Metronome => self.toggle_metronome(),
+            Action::TapTempo => self.tap_tempo(),
+            Action::Record => self.toggle_record(),
         }
         true
     }
@@ -974,6 +980,10 @@ impl QwertoneApp {
         }
         if self.tap.running && self.tap.done() {
             self.finish_tap_test();
+        }
+        // Recording (Part 4a): collect what the audio thread heard.
+        if self.drain_recording() {
+            ctx.request_repaint_after(Duration::from_millis(100));
         }
         // Lesson / ear-training examples.
         if self.tick_player() {

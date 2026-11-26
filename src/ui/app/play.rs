@@ -32,6 +32,8 @@ impl QwertoneApp {
                     card(ui, &p, "", |ui| now_playing(ui, &p, &sounding));
                 }
                 ui.add_space(6.0);
+                self.record_bar(ui);
+                ui.add_space(6.0);
                 if self.cfg.learn.explain && (has_notes || has_chords) {
                     self.overlay_card(ui, true);
                     ui.add_space(6.0);

@@ -103,6 +103,12 @@ pub enum Action {
     ScaleLock,
     /// Switch to the next layout (Piano → Chords → Isomorphic → Drums).
     LayoutNext,
+    /// Metronome on / off.
+    Metronome,
+    /// Tap in time to set the tempo.
+    TapTempo,
+    /// Start recording (with count-in) / stop and save a MIDI file.
+    Record,
 }
 
 /// Broad groups, for sorting and the keybind editor.
@@ -157,6 +163,9 @@ impl Action {
             "scale+" => Action::ScaleNext,
             "scale-lock" => Action::ScaleLock,
             "layout+" => Action::LayoutNext,
+            "metronome" => Action::Metronome,
+            "tap-tempo" => Action::TapTempo,
+            "record" => Action::Record,
             _ => return None,
         })
     }
@@ -197,11 +206,14 @@ impl Action {
             Action::ScaleNext => "Next scale (major, minor…)".into(),
             Action::ScaleLock => "Scale lock on / off".into(),
             Action::LayoutNext => "Next layout".into(),
+            Action::Metronome => "Metronome on / off".into(),
+            Action::TapTempo => "Tap tempo (tap in time)".into(),
+            Action::Record => "Record / stop + save MIDI".into(),
         }
     }
 
     /// Every control action (not notes/chords/drums), for menus.
-    pub const CONTROLS: [Action; 17] = [
+    pub const CONTROLS: [Action; 20] = [
         Action::Sustain,
         Action::OctaveUp,
         Action::OctaveDown,
@@ -219,6 +231,9 @@ impl Action {
         Action::ScaleNext,
         Action::ScaleLock,
         Action::LayoutNext,
+        Action::Metronome,
+        Action::TapTempo,
+        Action::Record,
     ];
 }
 
@@ -247,6 +262,9 @@ impl fmt::Display for Action {
             Action::ScaleNext => f.write_str("scale+"),
             Action::ScaleLock => f.write_str("scale-lock"),
             Action::LayoutNext => f.write_str("layout+"),
+            Action::Metronome => f.write_str("metronome"),
+            Action::TapTempo => f.write_str("tap-tempo"),
+            Action::Record => f.write_str("record"),
         }
     }
 }
@@ -260,6 +278,15 @@ struct KeymapFile {
     #[serde(default)]
     bindings: BTreeMap<String, String>,
 }
+
+/// Default metronome / tempo / record keys (F2–F3 belong to Learn).
+const RECORD_KEYS: [(Key, Action); 5] = [
+    (Key::F5, Action::Metronome),
+    (Key::F6, Action::TapTempo),
+    (Key::F7, Action::TempoDown),
+    (Key::F8, Action::TempoUp),
+    (Key::F9, Action::Record),
+];
 
 /// The layouts that ship with the app: (file name, display name).
 pub const BUILTIN_LAYOUTS: [(&str, &str); 4] = [
@@ -404,6 +431,19 @@ impl Keymap {
         false
     }
 
+    /// Part 4a keys for older saved layouts, where free.
+    pub fn ensure_record_keys(&mut self) -> bool {
+        let mut changed = false;
+        for (k, a) in RECORD_KEYS {
+            let id = KeyId::Key(k);
+            if self.keys_for(a).is_empty() && self.get(id).is_none() {
+                self.bind(id, a);
+                changed = true;
+            }
+        }
+        changed
+    }
+
     fn with_controls(mut b: HashMap<KeyId, Action>) -> HashMap<KeyId, Action> {
         use Key::*;
         for (k, a) in [
@@ -417,7 +457,10 @@ impl Keymap {
             (Tab, Action::Velocity),
             (Escape, Action::Panic),
             (F1, Action::LayoutNext),
-        ] {
+        ]
+        .into_iter()
+        .chain(RECORD_KEYS)
+        {
             b.entry(KeyId::Key(k)).or_insert(a);
         }
         b
@@ -755,5 +798,11 @@ mod tests {
         km.unbind(KeyId::Key(Key::F1));
         assert!(km.ensure_layout_key());
         assert!(!km.ensure_layout_key());
+        for (k, _) in RECORD_KEYS {
+            km.unbind(KeyId::Key(k));
+        }
+        assert!(km.ensure_record_keys());
+        assert!(!km.ensure_record_keys());
+        assert_eq!(km.get(KeyId::Key(Key::F9)), Some(Action::Record));
     }
 }

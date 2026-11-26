@@ -9,6 +9,7 @@ mod latency;
 mod learn;
 mod listen;
 mod music;
+mod record;
 mod song;
 mod theme;
 mod theory;

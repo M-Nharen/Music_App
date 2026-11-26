@@ -27,7 +27,7 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 1 | Engine, Piano layout, keybind editor + TOML, latency test, Bluetooth device profiles + codec switch, keyboard test, end4 theme, PKGBUILD (`packaging/arch`) | **done** |
 | 2 | Chords + Melody layout: diatonic chord keys (I–vii°, borrowed chords), modifiers (7th/sus4/add9/major↔minor on Shift/Alt/Ctrl and 1–4), scale lock, smart voice-leading, strum, arpeggiator, auto-accompaniment patterns (text files), Isomorphic + Drum layouts, layout switcher (F1) | **done** (branch `part-2-chords`) |
 | 3 | Learn mode: theory overlay, lessons (notes → intervals → scales → chords → progressions → circle of fifths → modes), ear-training games | **done** (branch `part-3-learn`) |
-| 4 | Recording + looper, MIDI export, virtual MIDI out (ALSA seq / PipeWire MIDI), more instruments, metronome | next |
+| 4 | **4a:** metronome + count-in + tap tempo, recording → MIDI export. **4b:** looper, virtual MIDI out (ALSA seq / PipeWire MIDI), more instruments | 4a **done** (branch `part-4a-record`, from `part-5-songs`); 4b next |
 | 5 | Song mode from analyzer song folders and MIDI files: falling notes labelled with keyboard keys, chord sheet, wait mode, loop + slow down, scoring, one-key mode, auto song layout, Bluetooth-synced visuals and scoring, analyzer started from the app with a progress bar | **done** (branch `part-5-songs`, which also has Part 6 merged in) |
 | 6 | Python pipeline: Demucs stems → extraction modes (chords only / melody only via CREPE / chords+melody / full via Basic Pitch / single instrument incl. piano model + drums / simplified) + confidence highlighting + note editor. Live listen mode | **done** (analyzer on branch `part-6-analyzer`; the note editor and live listen mode were built in Rust in `part-5-songs`) |
 | 7 | Jam mode: stem mixer with your part muted, time-stretch, Bluetooth delay compensation of backing + visuals | |
@@ -35,6 +35,16 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 9 | Polish: themes, stats, streaks, more lessons | |
 
 ## Notes for the next session
+
+### From Part 4a (metronome, recording, MIDI export)
+
+- **Branch:** `part-4a-record` = `part-5-songs` + 4a. Build 4b (looper, virtual MIDI out) from it.
+- **Recording runs in the audio thread:** `Renderer.rec` taps every event *you* cause (your notes on ch 0 incl. sustain-delayed offs, the sequencer's chords/strums/arps/patterns on 1–2 + pattern drums, drum keys on 9, program changes on 0–2, `AllOff`) and `try_send`s `(samples since start, RecEvent)` to a bounded channel (`Engine.recorded`). Song playback and `ChannelNote` (one-key / editor audition) aren't recorded. The UI drains it each frame into a `record::Take`.
+- **Count-in** is sample-exact: `Command::Record { on, count_in }` restarts the clicks (~50 ms lead) and sets the start to `next_click + count_in × beat`; anything earlier is dropped. If the metronome was off it clicks only for the count-in (`Metronome.off_at`). `cfg.count_in_beats` (default 4, 0 = none).
+- **Metronome:** the old latency-test click got `Command::Click(bool)`; a user click follows `Command::Tempo` (one shared tempo with the rhythm, `cfg.tempo`), accent every 4 beats. Not synced to the rhythm's bar yet. Not saved between runs.
+- **Export:** `Take::to_midi` = type-0 SMF, 480 TPB, the current tempo, 4/4; open notes closed at the end (drum hits get a short off). Saved as the next free `~/Music/qwertone/take-NNN.mid` (XDG music dir). The app's own MIDI reader opens them (tested).
+- **Keys** (remappable, new actions `metronome`, `tap-tempo`, `record`): F5 metronome, F6 tap tempo, F7/F8 tempo −/+, F9 record/stop. Added to saved layouts that don't have them yet (`ensure_record_keys`), where the key is free. UI: a bar on the Play tab under the chord/drum panel.
+- **Not checked on real hardware** (built and unit-tested only). Ideas: punch-in, quantise on export, record the song backing too, tempo changes mid-take (export uses the tempo at stop).
 
 ### From Part 5 (Song mode, note editor, live listen)
 

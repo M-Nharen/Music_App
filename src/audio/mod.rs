@@ -9,6 +9,7 @@ pub mod patterns;
 pub mod sequencer;
 pub mod songplay;
 
+use crate::record::RecEvent;
 use anyhow::{Context, Result, anyhow};
 use builtin::BuiltinSynth;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -74,6 +75,14 @@ pub enum Command {
         note: u8,
         velocity: u8,
     },
+    /// Your metronome on / off (follows `Tempo`, accent every 4 beats).
+    Click(bool),
+    /// Start / stop recording what you play. `count_in` beats of clicks
+    /// first (the metronome plays them even when it's off).
+    Record {
+        on: bool,
+        count_in: u32,
+    },
 }
 
 /// Numbers the UI shows about the engine. Written by the audio thread.
@@ -121,6 +130,34 @@ struct Metronome {
     next_at: u64,
     beat: u32,
     click_pos: Option<(usize, bool)>,
+    /// Started by `Click`: follows tempo changes.
+    user: bool,
+    /// Count-in only: stop clicking here.
+    off_at: Option<u64>,
+}
+
+/// Recording tap: copies what you play (not song playback) to the UI.
+struct Rec {
+    on: bool,
+    start: u64,
+    tx: Sender<(u64, RecEvent)>,
+}
+
+impl Rec {
+    fn tap(&self, t: u64, e: RecEvent) {
+        if self.on && t >= self.start {
+            let _ = self.tx.try_send((t - self.start, e));
+        }
+    }
+    fn seq(&self, t: u64, e: SeqEvent) {
+        self.tap(
+            t,
+            match e {
+                SeqEvent::On { ch, note, vel } => RecEvent::Note { ch, note, vel },
+                SeqEvent::Off { ch, note } => RecEvent::Note { ch, note, vel: 0 },
+            },
+        );
+    }
 }
 
 /// State that lives inside the audio callback.
@@ -143,6 +180,9 @@ struct Renderer {
     metro: Metronome,
     seq: Sequencer,
     song: SongPlayer,
+    tempo: f32,
+    rec: Rec,
+    pub rec_rx: Receiver<(u64, RecEvent)>,
 }
 
 const CLICK_LEN: usize = 1200;
@@ -156,6 +196,7 @@ impl Renderer {
         click_tx: Sender<Instant>,
         stats: Arc<Stats>,
     ) -> Self {
+        let (rec_tx, rec_rx) = crossbeam_channel::bounded(8192);
         let mut builtin = BuiltinSynth::new(sample_rate);
         for ch in 0..3 {
             builtin.set_program(ch, program);
@@ -181,9 +222,18 @@ impl Renderer {
                 next_at: 0,
                 beat: 0,
                 click_pos: None,
+                user: false,
+                off_at: None,
             },
             seq: Sequencer::new(sample_rate),
             song: SongPlayer::new(sample_rate),
+            tempo: 100.0,
+            rec: Rec {
+                on: false,
+                start: 0,
+                tx: rec_tx,
+            },
+            rec_rx,
         }
     }
 
@@ -223,6 +273,15 @@ impl Renderer {
                 }
                 self.held[n] = true;
                 self.sustained[n] = false;
+                let vel = velocity.clamp(1, 127) as u8;
+                self.rec.seq(
+                    self.sample_clock,
+                    SeqEvent::On {
+                        ch: 0,
+                        note: n as u8,
+                        vel,
+                    },
+                );
                 backend_event(
                     &mut self.backend,
                     SeqEvent::On {
@@ -246,8 +305,16 @@ impl Renderer {
             }
             Command::Sustain(on) => {
                 self.sustain = on;
-                let (seq, backend) = (&mut self.seq, &mut self.backend);
-                seq.set_pedal(on, self.sample_clock, &mut |e| backend_event(backend, e));
+                let (seq, backend, rec, t) = (
+                    &mut self.seq,
+                    &mut self.backend,
+                    &self.rec,
+                    self.sample_clock,
+                );
+                seq.set_pedal(on, t, &mut |e| {
+                    rec.seq(t, e);
+                    backend_event(backend, e)
+                });
                 if !on {
                     for n in 0..128 {
                         if self.sustained[n] && !self.held[n] {
@@ -258,17 +325,29 @@ impl Renderer {
                 }
             }
             Command::Program(p) => {
+                self.rec
+                    .tap(self.sample_clock, RecEvent::Program { ch: 0, program: p });
                 self.programs[0] = p;
                 self.apply_program();
             }
             Command::ChannelProgram { channel, program } => {
                 if let Some(slot) = self.programs.get_mut(channel as usize) {
+                    if channel < 3 {
+                        self.rec.tap(
+                            self.sample_clock,
+                            RecEvent::Program {
+                                ch: channel,
+                                program,
+                            },
+                        );
+                    }
                     *slot = program;
                     self.apply_program();
                 }
             }
             Command::Volume(v) => self.volume = v.clamp(0.0, 2.0),
             Command::AllOff => {
+                self.rec.tap(self.sample_clock, RecEvent::AllOff);
                 self.held = [false; 128];
                 self.sustained = [false; 128];
                 self.seq.reset();
@@ -298,8 +377,54 @@ impl Renderer {
                     (self.sample_rate as f64 * 60.0 / bpm.max(20.0) as f64) as u64;
                 self.metro.next_at = self.sample_clock + self.sample_rate as u64 / 4;
                 self.metro.beat = 0;
+                self.metro.user = false;
+                self.metro.off_at = None;
+            }
+            Command::Click(on) => {
+                self.metro.on = on;
+                self.metro.user = on;
+                self.metro.off_at = None;
+                if on {
+                    self.restart_clicks();
+                }
+            }
+            Command::Record { on, count_in } => {
+                self.rec.on = on;
+                if !on {
+                    if self.metro.off_at.take().is_some() {
+                        self.metro.on = false;
+                    }
+                    return;
+                }
+                self.rec.start = self.sample_clock;
+                if count_in > 0 {
+                    if !self.metro.on {
+                        self.metro.on = true;
+                        self.metro.user = true;
+                        self.metro.off_at = Some(0);
+                    }
+                    self.restart_clicks();
+                    self.rec.start = self.metro.next_at + count_in as u64 * self.metro.interval;
+                    if self.metro.off_at.is_some() {
+                        // Stop just before the first recorded beat's click.
+                        self.metro.off_at = Some(self.rec.start);
+                    }
+                }
+                for ch in 0..3u8 {
+                    let program = self.programs[ch as usize];
+                    self.rec
+                        .tap(self.rec.start, RecEvent::Program { ch, program });
+                }
             }
             Command::Drum { note, velocity } => {
+                self.rec.seq(
+                    self.sample_clock,
+                    SeqEvent::On {
+                        ch: CH_DRUMS,
+                        note,
+                        vel: velocity,
+                    },
+                );
                 backend_event(
                     &mut self.backend,
                     SeqEvent::On {
@@ -311,8 +436,18 @@ impl Renderer {
             }
             cmd => {
                 let now = self.sample_clock;
-                let (seq, backend) = (&mut self.seq, &mut self.backend);
-                let mut out = |e| backend_event(backend, e);
+                if let Command::Tempo(bpm) = &cmd {
+                    let bpm = *bpm;
+                    self.tempo = bpm;
+                    if self.metro.user {
+                        self.metro.interval = self.beat_samples();
+                    }
+                }
+                let (seq, backend, rec) = (&mut self.seq, &mut self.backend, &self.rec);
+                let mut out = |e| {
+                    rec.seq(now, e);
+                    backend_event(backend, e)
+                };
                 match cmd {
                     Command::Chord {
                         chord,
@@ -329,7 +464,25 @@ impl Renderer {
         }
     }
 
+    fn beat_samples(&self) -> u64 {
+        (self.sample_rate as f64 * 60.0 / self.tempo.clamp(20.0, 400.0) as f64) as u64
+    }
+
+    /// Clicks at the current tempo, first one (an accent) in ~50 ms.
+    fn restart_clicks(&mut self) {
+        self.metro.interval = self.beat_samples();
+        self.metro.next_at = self.sample_clock + self.sample_rate as u64 / 20;
+        self.metro.beat = 0;
+    }
+
     fn backend_off(&mut self, note: i32) {
+        self.rec.seq(
+            self.sample_clock,
+            SeqEvent::Off {
+                ch: 0,
+                note: note.clamp(0, 127) as u8,
+            },
+        );
         backend_event(
             &mut self.backend,
             SeqEvent::Off {
@@ -371,8 +524,11 @@ impl Renderer {
         while pos < frames {
             let now = self.sample_clock + pos as u64;
             {
-                let (seq, backend) = (&mut self.seq, &mut self.backend);
-                seq.process(now, &mut |e| backend_event(backend, e));
+                let (seq, backend, rec) = (&mut self.seq, &mut self.backend, &self.rec);
+                seq.process(now, &mut |e| {
+                    rec.seq(now, e);
+                    backend_event(backend, e)
+                });
                 let (song, backend) = (&mut self.song, &mut self.backend);
                 song.process(at(pos), &mut |e| backend_event(backend, e));
             }
@@ -418,6 +574,12 @@ impl Renderer {
         if self.metro.on {
             for i in 0..frames {
                 let t = self.sample_clock + i as u64;
+                if self.metro.off_at.is_some_and(|o| t >= o) {
+                    self.metro.off_at = None;
+                    self.metro.on = false;
+                    self.metro.user = false;
+                    break;
+                }
                 if t >= self.metro.next_at {
                     let accent = self.metro.beat.is_multiple_of(4);
                     self.metro.click_pos = Some((0, accent));
@@ -507,6 +669,8 @@ pub struct Engine {
     tx: Sender<Command>,
     pub stats: Arc<Stats>,
     pub clicks: Receiver<Instant>,
+    /// What you played while recording (see `Command::Record`).
+    pub recorded: Receiver<(u64, RecEvent)>,
     _stream: cpal::Stream,
 }
 
@@ -535,6 +699,7 @@ impl Engine {
         let (tx, rx) = unbounded();
         let (click_tx, clicks) = crossbeam_channel::bounded(64);
         let renderer = Renderer::new(sample_rate, program, volume, rx, click_tx, stats.clone());
+        let recorded = renderer.rec_rx.clone();
 
         let mut config: cpal::StreamConfig = default.config();
         config.buffer_size = cpal::BufferSize::Fixed(buffer_frames);
@@ -556,6 +721,7 @@ impl Engine {
             tx,
             stats,
             clicks,
+            recorded,
             _stream: stream,
         })
     }
@@ -729,6 +895,73 @@ mod tests {
         tx.send(Command::AllOff).unwrap();
         r.render_block(128, Instant::now());
         assert!(!r.seq.running());
+    }
+
+    #[test]
+    fn records_after_count_in() {
+        let (mut r, tx, clicks) = renderer();
+        tx.send(Command::Tempo(120.0)).unwrap();
+        tx.send(Command::Record {
+            on: true,
+            count_in: 4,
+        })
+        .unwrap();
+        // Played during the count-in: not recorded.
+        tx.send(Command::NoteOn {
+            note: 60,
+            velocity: 100,
+        })
+        .unwrap();
+        r.render_block(128, Instant::now());
+        // 50 ms lead + 4 beats of 0.5 s = 2.05 s; play at ~2.2 s.
+        for _ in 0..(105_600 / 128) {
+            r.render_block(128, Instant::now());
+        }
+        tx.send(Command::NoteOn {
+            note: 64,
+            velocity: 90,
+        })
+        .unwrap();
+        tx.send(Command::Drum {
+            note: 36,
+            velocity: 100,
+        })
+        .unwrap();
+        r.render_block(128, Instant::now());
+        tx.send(Command::NoteOff { note: 64 }).unwrap();
+        tx.send(Command::Record {
+            on: false,
+            count_in: 0,
+        })
+        .unwrap();
+        for _ in 0..400 {
+            r.render_block(128, Instant::now());
+        }
+        assert_eq!(
+            clicks.try_iter().count(),
+            4,
+            "count-in clicks, then silence"
+        );
+        let evs: Vec<_> = r.rec_rx.try_iter().collect();
+        let notes: Vec<_> = evs
+            .iter()
+            .filter(|(_, e)| matches!(e, RecEvent::Note { vel: 1.., .. }))
+            .collect();
+        assert_eq!(notes.len(), 2, "{evs:?}");
+        let t = notes[0].0 as i64;
+        assert!((t - 7_200).abs() < 200, "first note ~0.15 s in, got {t}");
+        assert!(evs.iter().any(|(_, e)| *e
+            == RecEvent::Note {
+                ch: 0,
+                note: 64,
+                vel: 0
+            }));
+        assert!(evs.iter().any(|(_, e)| *e
+            == RecEvent::Note {
+                ch: CH_DRUMS,
+                note: 36,
+                vel: 100
+            }));
     }
 
     #[test]
