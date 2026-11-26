@@ -23,21 +23,36 @@ impl QwertoneApp {
                 self.toolbar(ui, has_notes);
                 ui.add_space(6.0);
 
+                // What's sounding (+ the explanation next to it), then the
+                // keyboard, so the keys are on screen at the default size.
+                let explain = self.cfg.learn.explain && (has_notes || has_chords);
                 if has_chords {
                     self.chord_panel(ui);
+                    ui.add_space(6.0);
+                    if explain {
+                        self.overlay_card(ui, true);
+                        ui.add_space(6.0);
+                    }
                 } else if has_drums && !has_notes {
                     self.drum_panel(ui);
+                    ui.add_space(6.0);
                 } else {
                     let sounding: Vec<i32> = self.sounding.values().copied().collect();
-                    card(ui, &p, "", |ui| now_playing(ui, &p, &sounding));
-                }
-                ui.add_space(6.0);
-                self.record_bar(ui);
-                ui.add_space(6.0);
-                self.looper_bar(ui);
-                ui.add_space(6.0);
-                if self.cfg.learn.explain && (has_notes || has_chords) {
-                    self.overlay_card(ui, true);
+                    if explain && ui.available_width() > 820.0 {
+                        ui.columns(2, |cols| {
+                            card(&mut cols[0], &p, "", |ui| {
+                                ui.set_min_height(150.0);
+                                now_playing(ui, &p, &sounding)
+                            });
+                            self.overlay_card(&mut cols[1], true);
+                        });
+                    } else {
+                        card(ui, &p, "", |ui| now_playing(ui, &p, &sounding));
+                        if explain {
+                            ui.add_space(6.0);
+                            self.overlay_card(ui, true);
+                        }
+                    }
                     ui.add_space(6.0);
                 }
 
@@ -53,6 +68,10 @@ impl QwertoneApp {
                 }
                 .show(ui);
                 drop(label);
+                ui.add_space(8.0);
+                self.record_bar(ui);
+                ui.add_space(6.0);
+                self.looper_bar(ui);
                 ui.add_space(8.0);
 
                 self.instrument_visual(ui, has_chords, has_drums && !has_notes);
@@ -665,9 +684,9 @@ impl QwertoneApp {
                         self.reload_patterns();
                     }
                     if ui.button("Open patterns folder").clicked() {
-                        let _ = std::process::Command::new("xdg-open")
-                            .arg(config::patterns_dir())
-                            .spawn();
+                        let d = config::patterns_dir();
+                        let _ = std::fs::create_dir_all(&d);
+                        settings::open_path(&d);
                     }
                 });
                 ui.label(

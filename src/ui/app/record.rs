@@ -202,9 +202,9 @@ impl QwertoneApp {
                             .on_hover_text(path.display().to_string())
                             .clicked()
                     {
-                        let _ = std::process::Command::new("xdg-open")
-                            .arg(takes_dir())
-                            .spawn();
+                        let d = takes_dir();
+                        let _ = std::fs::create_dir_all(&d);
+                        super::settings::open_path(&d);
                     }
                 }
             });

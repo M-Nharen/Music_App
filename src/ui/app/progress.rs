@@ -17,6 +17,7 @@ fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
 }
 
 fn big_number(ui: &mut egui::Ui, p: &Palette, value: String, label: &str, sub: String) {
+    ui.set_min_height(120.0);
     ui.label(RichText::new(label).color(p.on_surface_variant));
     ui.label(RichText::new(value).size(30.0).strong().color(p.primary));
     if !sub.is_empty() {
@@ -71,8 +72,8 @@ impl QwertoneApp {
                         ui,
                         &p,
                         match st.current {
-                            1 => "🔥 1 day".into(),
-                            n => format!("🔥 {n} days"),
+                            1 => "1 day".into(),
+                            n => format!("{n} days"),
                         },
                         "Streak",
                         if st.today_done || st.current == 0 {
@@ -294,9 +295,9 @@ impl QwertoneApp {
         let p = self.palette;
         let start = today.week_start().plus(-7 * (WEEKS - 1));
         let goal_s = (self.cfg.practice.goal_minutes as f64 * 60.0).max(600.0);
-        let cell = 15.0;
         let gap = 3.0;
         let left = 34.0;
+        let cell = ((ui.available_width() - left) / WEEKS as f32 - gap).clamp(12.0, 24.0);
         let top = 18.0;
         let w = left + WEEKS as f32 * (cell + gap);
         let h = top + 7.0 * (cell + gap);
@@ -375,7 +376,7 @@ impl QwertoneApp {
                     mix(p.surface_container_high, p.primary, step),
                 );
             }
-            ui.label(RichText::new("More (darkest = twice your goal)").small().color(p.on_surface_variant));
+            ui.label(RichText::new("More (the strongest colour = twice your daily goal or more)").small().color(p.on_surface_variant));
         });
     }
 

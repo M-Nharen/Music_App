@@ -247,9 +247,16 @@ impl QwertoneApp {
             return;
         }
         let stems: Vec<String> = song.stems.iter().map(|s| s.name.clone()).collect();
-        egui::CollapsingHeader::new(RichText::new("Jam with the recording").strong())
+        // Closed by default so the falling notes fit on screen; the title
+        // says whether the recording is playing.
+        let title = if self.cfg.jam.on {
+            "Jam with the recording · on"
+        } else {
+            "Jam with the recording · off (MIDI backing)"
+        };
+        egui::CollapsingHeader::new(RichText::new(title).strong())
             .id_salt("song-jam")
-            .default_open(true)
+            .default_open(false)
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let mut on = self.cfg.jam.on;

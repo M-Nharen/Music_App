@@ -63,9 +63,9 @@ impl QwertoneApp {
                 self.notify(format!("Layout reset to the {label} defaults"));
             }
             if ui.button("Open folder").clicked() {
-                let _ = std::process::Command::new("xdg-open")
-                    .arg(config::keymaps_dir())
-                    .spawn();
+                let d = config::keymaps_dir();
+                let _ = std::fs::create_dir_all(&d);
+                settings::open_path(&d);
             }
         });
         for w in &self.keymap_warnings {

@@ -99,19 +99,22 @@ impl QwertoneApp {
         self.stats.note(a, Instant::now());
     }
 
-    /// "🔥 4 days" in the header (click → Progress).
+    /// "4-day streak" in the header (click → Progress).
     pub(super) fn streak_chip(&mut self, ui: &mut egui::Ui) {
         if !self.cfg.practice.streak_chip {
             return;
         }
         let p = self.palette;
         let st = self.stats.streak();
+        if st.current == 0 && ui.available_width() < 400.0 {
+            return; // narrow window: no room for the invitation
+        }
         let today = self.stats.today_stats().total_s();
         let goal = self.cfg.practice.goal_minutes as f64 * 60.0;
         let text = match st.current {
             0 => "Start a streak today".to_string(),
-            1 => "🔥 1 day".to_string(),
-            n => format!("🔥 {n} days"),
+            1 => "1-day streak".to_string(),
+            n => format!("{n}-day streak"),
         };
         let (fill, fg) = if st.today_done {
             (p.primary_container, p.on_primary_container)
@@ -182,9 +185,11 @@ impl QwertoneApp {
                         self.cfg.practice.streak_chip = chip_on;
                         self.mark_dirty();
                     }
-                    if ui.button("Open Progress").clicked() {
-                        self.tab = Tab::Progress;
-                    }
+                    ui.horizontal(|ui| {
+                        if ui.button("Open Progress").clicked() {
+                            self.tab = Tab::Progress;
+                        }
+                    });
                 });
             });
             ui.add_space(8.0);
@@ -241,34 +246,43 @@ impl QwertoneApp {
             "Theme"
         });
         let mut picked = None;
-        ui.horizontal_wrapped(|ui| {
-            for (id, name, pal) in theme::builtin_themes() {
-                let sel = self.cfg.theme == id;
-                let resp = egui::Frame::new()
-                    .fill(pal.surface_container)
-                    .stroke(egui::Stroke::new(
-                        if sel { 2.5 } else { 1.0 },
-                        if sel { p.primary } else { p.outline_variant },
-                    ))
-                    .corner_radius(egui::CornerRadius::same(14))
-                    .inner_margin(egui::Margin::symmetric(12, 8))
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            for c in [pal.primary, pal.tertiary, pal.primary_container] {
-                                let (r, _) =
-                                    ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
-                                ui.painter().circle_filled(r.center(), 7.0, c);
-                            }
-                            ui.label(RichText::new(name).color(pal.on_surface));
-                        });
-                    })
-                    .response
-                    .interact(egui::Sense::click());
-                if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                    picked = Some(id);
+        egui::Grid::new("themes")
+            .num_columns(2)
+            .spacing([8.0, 8.0])
+            .show(ui, |ui| {
+                for (i, (id, name, pal)) in theme::builtin_themes().into_iter().enumerate() {
+                    let sel = self.cfg.theme == id;
+                    let resp = egui::Frame::new()
+                        .fill(pal.surface_container)
+                        .stroke(egui::Stroke::new(
+                            if sel { 2.5 } else { 1.0 },
+                            if sel { p.primary } else { p.outline_variant },
+                        ))
+                        .corner_radius(egui::CornerRadius::same(14))
+                        .inner_margin(egui::Margin::symmetric(12, 8))
+                        .show(ui, |ui| {
+                            ui.set_width(150.0);
+                            ui.horizontal(|ui| {
+                                for c in [pal.primary, pal.tertiary, pal.primary_container] {
+                                    let (r, _) = ui.allocate_exact_size(
+                                        egui::vec2(14.0, 14.0),
+                                        egui::Sense::hover(),
+                                    );
+                                    ui.painter().circle_filled(r.center(), 7.0, c);
+                                }
+                                ui.label(RichText::new(name).color(pal.on_surface));
+                            });
+                        })
+                        .response
+                        .interact(egui::Sense::click());
+                    if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                        picked = Some(id);
+                    }
+                    if i % 2 == 1 {
+                        ui.end_row();
+                    }
                 }
-            }
-        });
+            });
         if let Some(id) = picked {
             self.cfg.theme = id.to_string();
             if end4_on {
@@ -338,7 +352,7 @@ impl QwertoneApp {
                                 .monospace()
                                 .color(p.on_surface_variant),
                         )
-                        .wrap_mode(egui::TextWrapMode::Truncate),
+                        .wrap_mode(egui::TextWrapMode::Extend),
                     );
                     // Open the file itself if it exists, else its folder.
                     let target = if path.exists() {

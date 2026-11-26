@@ -589,7 +589,15 @@ pub fn card<R>(ui: &mut Ui, p: &Palette, title: &str, add: impl FnOnce(&mut Ui) 
                 );
                 ui.add_space(4.0);
             }
-            add(ui)
+            // Cards inside `ui.columns` would inherit its justified layout:
+            // every button stretched across the card and text spread out
+            // to both edges. Cards read better left-aligned.
+            if ui.layout().horizontal_justify() {
+                ui.with_layout(egui::Layout::top_down(egui::Align::Min), add)
+                    .inner
+            } else {
+                add(ui)
+            }
         })
         .inner
 }

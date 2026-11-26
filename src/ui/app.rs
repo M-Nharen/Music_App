@@ -1202,6 +1202,8 @@ impl QwertoneApp {
 
     fn header(&mut self, ui: &mut egui::Ui) {
         let p = self.palette;
+        // Room for the chips next to the tabs?
+        let wide = ui.available_width() > 1060.0;
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new("♪ Qwertone")
@@ -1250,45 +1252,71 @@ impl QwertoneApp {
                     self.capture_for = None;
                 }
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if let Some(d) = &self.current_device {
-                    let mut text = if d.bluetooth {
-                        "Bluetooth · ".to_string()
-                    } else {
-                        String::new()
-                    };
-                    text += &self.device_name(d);
-                    if let Some(c) = &d.codec {
-                        text += &format!(" · {}", c.to_uppercase());
-                    }
-                    if let Some(prof) = self.cfg.devices.get(&d.sink) {
-                        text += &format!(" · {:.0} ms", prof.latency_ms);
-                    }
-                    let (fill, fg) = if d.bluetooth {
-                        (p.tertiary_container, p.on_surface)
-                    } else {
-                        (p.surface_container_high, p.on_surface)
-                    };
-                    chip(ui, fill, fg, text);
-                }
-                if self.engine.is_none() {
-                    chip(ui, p.error, p.surface, "audio off");
-                }
-                self.streak_chip(ui);
-                if self.loop_ui.midi.is_some() {
-                    chip(ui, p.surface_container_high, p.on_surface, "MIDI out");
-                }
-                if let Some((text, limited)) = self.spotify_header_chip() {
-                    let (fill, fg) = if limited {
-                        (p.tertiary_container, p.on_surface)
-                    } else {
-                        (p.surface_container_high, p.on_surface_variant)
-                    };
-                    chip(ui, fill, fg, text);
-                    ui.ctx().request_repaint_after(Duration::from_secs(1));
-                }
-            });
+            if wide {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.header_chips(ui, false)
+                });
+            }
         });
+        if !wide {
+            // Not enough room next to the tabs: the chips get their own row.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                self.header_chips(ui, true)
+            });
+        }
+    }
+
+    /// Output device, audio off, streak, MIDI out, Spotify. `narrow` =
+    /// shorter texts.
+    fn header_chips(&mut self, ui: &mut egui::Ui, narrow: bool) {
+        let p = self.palette;
+        if let Some(d) = &self.current_device {
+            let mut parts: Vec<String> = Vec::new();
+            if d.bluetooth {
+                parts.push("Bluetooth".into());
+            }
+            if !narrow {
+                let name = self.device_name(d);
+                parts.push(if name.chars().count() > 28 {
+                    name.chars().take(27).collect::<String>() + "…"
+                } else {
+                    name
+                });
+                if let Some(c) = &d.codec {
+                    parts.push(c.to_uppercase());
+                }
+            }
+            if let Some(prof) = self.cfg.devices.get(&d.sink) {
+                parts.push(format!("{:.0} ms", prof.latency_ms));
+            }
+            let text = if parts.is_empty() {
+                "Output".to_string()
+            } else {
+                parts.join(" · ")
+            };
+            let (fill, fg) = if d.bluetooth {
+                (p.tertiary_container, p.on_surface)
+            } else {
+                (p.surface_container_high, p.on_surface)
+            };
+            chip(ui, fill, fg, text);
+        }
+        if self.engine.is_none() {
+            chip(ui, p.error, p.surface, "audio off");
+        }
+        self.streak_chip(ui);
+        if self.loop_ui.midi.is_some() {
+            chip(ui, p.surface_container_high, p.on_surface, "MIDI out");
+        }
+        if let Some((text, limited)) = self.spotify_header_chip() {
+            let (fill, fg) = if limited {
+                (p.tertiary_container, p.on_surface)
+            } else {
+                (p.surface_container_high, p.on_surface_variant)
+            };
+            chip(ui, fill, fg, text);
+            ui.ctx().request_repaint_after(Duration::from_secs(1));
+        }
     }
 
     fn audio_tab(&mut self, ui: &mut egui::Ui) {

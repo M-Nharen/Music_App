@@ -1600,7 +1600,7 @@ impl QwertoneApp {
                         if ui.small_button("Open folder").clicked() {
                             let d = crate::song::songs_dir();
                             let _ = std::fs::create_dir_all(&d);
-                            let _ = std::process::Command::new("xdg-open").arg(d).spawn();
+                            settings::open_path(&d);
                         }
                     });
                     if self.song_ui.library.is_empty() {
@@ -1733,11 +1733,20 @@ impl QwertoneApp {
         let Some(program) = self.song_ui.analyzer.clone() else {
             ui.add_space(4.0);
             ui.label(RichText::new("The analyzer isn't installed yet.").color(p.tertiary));
-            ui.label("Install it once from the app's folder:");
-            ui.code("cd analyzer && ./setup.sh        # add --gpu for an NVIDIA card");
-            if ui.button("Look again").clicked() {
-                self.song_ui.analyzer = analyze::find_analyzer();
-            }
+            ui.label("Install it once from the folder you cloned Qwertone into:");
+            ui.code("cd analyzer && ./setup.sh");
+            ui.label(
+                RichText::new(
+                    "Add --gpu for an NVIDIA card. It installs qwertone-analyze into ~/.local/bin.",
+                )
+                .small()
+                .color(p.on_surface_variant),
+            );
+            ui.horizontal(|ui| {
+                if ui.button("Look again").clicked() {
+                    self.song_ui.analyzer = analyze::find_analyzer();
+                }
+            });
             return;
         };
         if let Some(job) = &self.song_ui.job {
