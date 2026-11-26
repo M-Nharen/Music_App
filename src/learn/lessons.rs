@@ -883,6 +883,331 @@ pub const CHAPTERS: &[Chapter] = &[
             },
         ],
     },
+    // ---- Part 9: rhythm, first tunes, inversions, Indian music.
+    Chapter {
+        title: "8 · Rhythm & first tunes",
+        lessons: &[
+            Lesson {
+                id: "beats",
+                title: "Beats and tempo",
+                summary: "The pulse under every song",
+                layout: Layout::Notes,
+                circle: false,
+                steps: &[
+                    Read(
+                        "Almost all music sits on a steady pulse called the beat: the thing you tap your foot to. How fast the beats come is the tempo, counted in beats per minute (BPM). 60 BPM is one beat a second; most pop songs are around 90–130.",
+                    ),
+                    Listen {
+                        text: "Four beats at 100 BPM. The low note marks beat 1: that's where the bar (a group of 4 beats) starts. Count along: ONE two three four.",
+                        sound: &[
+                            &[-12, 0],
+                            &[0],
+                            &[0],
+                            &[0],
+                            &[-12, 0],
+                            &[0],
+                            &[0],
+                            &[0],
+                        ],
+                        gap_ms: 600,
+                    },
+                    Listen {
+                        text: "Same tempo, but two notes per beat (eighth notes). The beat didn't get faster: each beat is just split in half. Count: ONE-and two-and three-and four-and.",
+                        sound: &[
+                            &[-12, 0],
+                            &[7],
+                            &[0],
+                            &[7],
+                            &[0],
+                            &[7],
+                            &[0],
+                            &[7],
+                        ],
+                        gap_ms: 300,
+                    },
+                    Listen {
+                        text: "Now with gaps (rests). Silence is part of the rhythm too: ONE (two) three (four).",
+                        sound: &[&[-12, 0], &[], &[7], &[], &[-12, 0], &[], &[7], &[]],
+                        gap_ms: 600,
+                    },
+                    Read(
+                        "Practise with the metronome: {a:metronome} turns the click on and off, {a:tempo-} / {a:tempo+} change the speed, and {a:tap-tempo} lets you tap a tempo in. Start slow: playing it right slowly beats playing it wrong quickly.",
+                    ),
+                    Play {
+                        text: "Turn the click on and play C on every beat for a bar or two ({n:0}). Then play C and G in turn, one per beat.",
+                        targets: &[Note(0), Note(0), Note(0), Note(0), Note(0), Note(7), Note(0), Note(7)],
+                        done: "Steady beats are the hardest thing to learn and the most important. The Song tab's wait mode and scoring will help with timing later.",
+                    },
+                ],
+            },
+            Lesson {
+                id: "first-tunes",
+                title: "Your first tunes",
+                summary: "Ode to Joy, Twinkle Twinkle, Frère Jacques",
+                layout: Layout::Notes,
+                circle: false,
+                steps: &[
+                    Read(
+                        "Most simple tunes move by step: to the next note of the scale, up or down. These three only use the white keys from C to A, so your hand barely moves.",
+                    ),
+                    Listen {
+                        text: "Ode to Joy (Beethoven). Listen first.",
+                        sound: &[
+                            &[4], &[4], &[5], &[7], &[7], &[5], &[4], &[2], &[0], &[0], &[2], &[4],
+                            &[4], &[], &[2], &[2],
+                        ],
+                        gap_ms: 420,
+                    },
+                    Play {
+                        text: "Play Ode to Joy: E E F G G F E D C C D E E D D.",
+                        targets: &[
+                            Note(4),
+                            Note(4),
+                            Note(5),
+                            Note(7),
+                            Note(7),
+                            Note(5),
+                            Note(4),
+                            Note(2),
+                            Note(0),
+                            Note(0),
+                            Note(2),
+                            Note(4),
+                            Note(4),
+                            Note(2),
+                            Note(2),
+                        ],
+                        done: "That's the famous theme from Beethoven's 9th Symphony, nearly all by step.",
+                    },
+                    Play {
+                        text: "Twinkle Twinkle Little Star: C C G G A A G, F F E E D D C.",
+                        targets: &[
+                            Note(0),
+                            Note(0),
+                            Note(7),
+                            Note(7),
+                            Note(9),
+                            Note(9),
+                            Note(7),
+                            Note(5),
+                            Note(5),
+                            Note(4),
+                            Note(4),
+                            Note(2),
+                            Note(2),
+                            Note(0),
+                        ],
+                        done: "Notice the leap from C up to G (a 5th), then it walks back down by step to home.",
+                    },
+                    Play {
+                        text: "Frère Jacques: C D E C, C D E C, E F G, E F G.",
+                        targets: &[
+                            Note(0),
+                            Note(2),
+                            Note(4),
+                            Note(0),
+                            Note(0),
+                            Note(2),
+                            Note(4),
+                            Note(0),
+                            Note(4),
+                            Note(5),
+                            Note(7),
+                            Note(4),
+                            Note(5),
+                            Note(7),
+                        ],
+                        done: "This one is a round: several people sing it starting at different times and it still fits. Try it with the looper (Play tab) later!",
+                    },
+                ],
+            },
+            Lesson {
+                id: "inversions",
+                title: "Inversions",
+                summary: "Same chord, different order",
+                layout: Layout::Notes,
+                circle: false,
+                steps: &[
+                    Read(
+                        "A chord's notes can be stacked in any order. C major is C E G, but E G C and G C E are still C major: they're its inversions. Pianists use them so their hand doesn't have to jump between chords.",
+                    ),
+                    Listen {
+                        text: "C major: root position (C E G), first inversion (E G C), second inversion (G C E).",
+                        sound: &[&[0, 4, 7], &[], &[4, 7, 12], &[], &[7, 12, 16]],
+                        gap_ms: 600,
+                    },
+                    Play {
+                        text: "Hold C E G together, then E G C (C on top).",
+                        targets: &[Together(&[0, 4, 7]), Together(&[4, 7, 12])],
+                        done: "Same chord name, slightly different colour: the top note is what you hear most.",
+                    },
+                    Read(
+                        "Here's the trick: going from C to F, keep the C you already hold and move the others up a little: C E G → C F A. That's an inversion of F (its 2nd), and your hand stayed put. The Chords + Melody layout does this for you automatically (\"smart voice-leading\").",
+                    ),
+                    Play {
+                        text: "Play C E G, then C F A, then B D G (G major with B at the bottom), then C E G again.",
+                        targets: &[
+                            Together(&[0, 4, 7]),
+                            Together(&[0, 5, 9]),
+                            Together(&[11, 14, 19]),
+                            Together(&[0, 4, 7]),
+                        ],
+                        done: "I – IV – V – I with almost no hand movement. That's how pianists accompany songs.",
+                    },
+                ],
+            },
+            Lesson {
+                id: "melody-chords",
+                title: "Melody over chords",
+                summary: "Both hands: a chord, then a tune on top",
+                layout: Layout::Chords,
+                circle: false,
+                steps: &[
+                    Read(
+                        "Most songs are a melody on top of chords. A melody note that's part of the chord sounds settled; one that isn't adds colour and wants to move. In the Chords + Melody layout, chord keys are on the left and melody keys on the right, so you can play both.",
+                    ),
+                    Play {
+                        text: "Play the C chord ({c:I}), then the melody notes E and G (both in the chord).",
+                        targets: &[Chord("I"), Note(4), Note(7)],
+                        done: "E and G belong to C major, so they blend right in.",
+                    },
+                    Play {
+                        text: "Now the F chord ({c:IV}), then A and C on top.",
+                        targets: &[Chord("IV"), Note(9), Note(12)],
+                        done: "Same idea: A and C are notes of F major.",
+                    },
+                    Play {
+                        text: "G chord ({c:V}) with B and D, then back home: C chord with a C on top.",
+                        targets: &[Chord("V"), Note(11), Note(14), Chord("I"), Note(12)],
+                        done: "You just harmonised a tune. When you're stuck making up a melody, start with the notes of the chord you're on.",
+                    },
+                ],
+            },
+        ],
+    },
+    Chapter {
+        title: "9 · Indian music: sargam & ragas",
+        lessons: &[
+            Lesson {
+                id: "sargam",
+                title: "Sa Re Ga Ma",
+                summary: "The Indian names for the notes",
+                layout: Layout::Notes,
+                circle: false,
+                steps: &[
+                    Read(
+                        "Indian music names notes by their place in the scale, not by letters: Sa Re Ga Ma Pa Dha Ni, then Sa again (Carnatic music writes Ri and Da for Re and Dha). This is called sargam (swaras in Carnatic music).\n\nSa is home and can be any pitch: singers pick the Sa that suits their voice. Here Sa = C.",
+                    ),
+                    Listen {
+                        text: "Sa and Pa together are the drone you hear behind almost all Indian music (a tanpura or shruti box). Sa – Pa – Sa'.",
+                        sound: &[&[-12, -5, 0], &[], &[-12, 0], &[-5, 7], &[-12, 0, 12]],
+                        gap_ms: 700,
+                    },
+                    Play {
+                        text: "Play Sa Re Ga Ma Pa Dha Ni Sa' (with Sa = C, these are the white keys: C D E F G A B C).",
+                        targets: &[
+                            Note(0),
+                            Note(2),
+                            Note(4),
+                            Note(5),
+                            Note(7),
+                            Note(9),
+                            Note(11),
+                            Note(12),
+                        ],
+                        done: "This set of notes is raga Shankarabharanam in Carnatic music and Bilawal thaat in Hindustani music: the same notes as the Western major scale.",
+                    },
+                    Play {
+                        text: "Come back down: Sa' Ni Dha Pa Ma Ga Re Sa.",
+                        targets: &[
+                            Note(12),
+                            Note(11),
+                            Note(9),
+                            Note(7),
+                            Note(5),
+                            Note(4),
+                            Note(2),
+                            Note(0),
+                        ],
+                        done: "Going up is the arohanam, coming down the avarohanam. Every raga has both, and they don't always use the same notes.",
+                    },
+                    Read(
+                        "Sa and Pa never change. The other five can be raised or lowered, which is how ragas get their different moods: Re, Ga, Dha and Ni can be lower (komal), Ma can be higher (tivra / prati madhyamam). Change the key of the app ({a:transpose+} / {a:transpose-}) to move Sa to a comfortable pitch for singing.",
+                    ),
+                ],
+            },
+            Lesson {
+                id: "mayamalavagowla",
+                title: "Mayamalavagowla",
+                summary: "The first raga Carnatic students learn",
+                layout: Layout::Notes,
+                circle: false,
+                steps: &[
+                    Read(
+                        "Mayamalavagowla (Bhairav in Hindustani music) is where Carnatic lessons traditionally begin. It lowers Re and Dha by a half step, which gives two big gaps, between Re and Ga and between Dha and Ni. That's what makes it sound so different from the major scale.",
+                    ),
+                    Listen {
+                        text: "Sa Ri Ga Ma Pa Da Ni Sa', with Sa = C: C D♭ E F G A♭ B C.",
+                        sound: &[&[0], &[1], &[4], &[5], &[7], &[8], &[11], &[12]],
+                        gap_ms: 480,
+                    },
+                    Play {
+                        text: "Play it going up. Watch for the black keys: Ri is D♭, Da is A♭.",
+                        targets: &[
+                            Note(0),
+                            Note(1),
+                            Note(4),
+                            Note(5),
+                            Note(7),
+                            Note(8),
+                            Note(11),
+                            Note(12),
+                        ],
+                        done: "The half steps on both sides of Sa and Pa give it its devotional, serious sound.",
+                    },
+                    Play {
+                        text: "Now coming down: Sa' Ni Da Pa Ma Ga Ri Sa.",
+                        targets: &[
+                            Note(12),
+                            Note(11),
+                            Note(8),
+                            Note(7),
+                            Note(5),
+                            Note(4),
+                            Note(1),
+                            Note(0),
+                        ],
+                        done: "Sarali varisai, the first Carnatic exercises, are patterns on exactly these notes. Try making up your own patterns: Sa Ri Ga Ma, Ri Ga Ma Pa, …",
+                    },
+                ],
+            },
+            Lesson {
+                id: "mohanam",
+                title: "Mohanam",
+                summary: "A five-note raga that's always sweet",
+                layout: Layout::Notes,
+                circle: false,
+                steps: &[
+                    Read(
+                        "Mohanam (Bhoopali in Hindustani music) leaves out Ma and Ni: Sa Ri Ga Pa Da Sa'. Five notes, no half steps, so no two notes clash. It's the same as the Western major pentatonic (lesson 3).",
+                    ),
+                    Play {
+                        text: "Sa Ri Ga Pa Da Sa', with Sa = C: C D E G A C.",
+                        targets: &[Note(0), Note(2), Note(4), Note(7), Note(9), Note(12)],
+                        done: "Many film songs and folk tunes across India are built on these five notes.",
+                    },
+                    Play {
+                        text: "Come down and land on Sa: Sa' Da Pa Ga Ri Sa.",
+                        targets: &[Note(12), Note(9), Note(7), Note(4), Note(2), Note(0)],
+                        done: "Make up a tune using only these five notes: it's very hard to sound wrong. The scale lock ({a:scale-lock}) with the Pentatonic scale makes every key one of them.",
+                    },
+                    Read(
+                        "Other ragas to look up next: Hamsadhwani (Sa Ri Ga Pa Ni), Kalyani (Shankarabharanam with a raised Ma, like the Lydian mode), Kharaharapriya (like Dorian), and Hindolam (Sa Ga Ma Da Ni with lowered Ga, Da, Ni). The Learn tab's modes lessons (chapter 7) are their Western cousins.",
+                    ),
+                ],
+            },
+        ],
+    },
 ];
 
 /// Every lesson in order.
@@ -934,7 +1259,9 @@ mod tests {
                 check_placeholders(text);
             }
         }
-        assert!(all().count() >= 20);
+        assert!(all().count() >= 27);
+        assert_eq!(next_after("mode-vamps").unwrap().id, "beats");
+        assert!(find("mayamalavagowla").is_some());
         assert_eq!(next_after("alphabet").unwrap().id, "octaves");
         assert!(find("modes").is_some());
     }

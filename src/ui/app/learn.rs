@@ -759,7 +759,9 @@ impl QwertoneApp {
 
     fn finish_lesson(&mut self) {
         self.learn.lesson_done = true;
-        self.cfg.learn.done.insert(self.learn.lesson.id.to_string());
+        if self.cfg.learn.done.insert(self.learn.lesson.id.to_string()) {
+            self.stats.lesson_done();
+        }
         self.mark_dirty();
     }
 
@@ -951,6 +953,9 @@ impl QwertoneApp {
                 self.learn.answered = Some(Instant::now());
                 self.learn.wrong = None;
                 self.learn.score.record(!self.learn.missed);
+                if !self.learn.missed {
+                    self.stats.ear_right();
+                }
                 let code = self.learn.game.code().to_string();
                 let best = self.cfg.learn.best.get(&code).copied().unwrap_or(0);
                 if self.learn.score.best_streak > best {

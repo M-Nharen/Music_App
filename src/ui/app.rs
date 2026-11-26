@@ -6,7 +6,9 @@ mod learn;
 mod listen;
 mod looper;
 mod play;
+mod progress;
 mod record;
+mod settings;
 mod song;
 mod spotify_tab;
 
@@ -47,9 +49,19 @@ enum Tab {
     Song,
     Listen,
     Spotify,
+    /// Practice stats and streaks (Part 9).
+    Progress,
+    // The Settings group (one header button, a row of sub-pages).
+    General,
     Keybinds,
     Audio,
     KeyTest,
+}
+
+impl Tab {
+    fn is_settings(self) -> bool {
+        matches!(self, Tab::General | Tab::Keybinds | Tab::Audio | Tab::KeyTest)
+    }
 }
 
 pub struct QwertoneApp {
@@ -137,6 +149,13 @@ pub struct QwertoneApp {
     /// Spotify (Part 8).
     spotify: spotify_tab::SpotifyUi,
 
+    /// Practice time, streaks (Part 9).
+    stats: crate::stats::Tracker,
+    /// The settings page the Settings button opens.
+    settings_page: Tab,
+    /// "Reset stats" waiting for a second click.
+    confirm_reset_stats: Option<Instant>,
+
     toast: Option<(String, Instant)>,
     last_poll: Instant,
 }
@@ -149,12 +168,13 @@ impl QwertoneApp {
         let (palette, theme_file) = if cfg.follow_system_theme {
             match theme::load_system_palette() {
                 Some((p, path)) => (p, Some(path)),
-                None => (Palette::default(), None),
+                None => (theme::builtin_palette(&cfg.theme), None),
             }
         } else {
-            (Palette::default(), None)
+            (theme::builtin_palette(&cfg.theme), None)
         };
         theme::apply(ctx, &palette);
+        ctx.set_zoom_factor(cfg.ui_scale.clamp(0.8, 1.6));
 
         let keymap_file = cfg.keymap.clone();
         let (keymap, keymap_warnings) = config::load_keymap(&keymap_file);
@@ -212,6 +232,9 @@ impl QwertoneApp {
             song_ui: song::SongUi::new(),
             listen: listen::ListenUi::default(),
             spotify: spotify_tab::SpotifyUi::new(&Default::default()),
+            stats: crate::stats::Tracker::load(),
+            settings_page: Tab::General,
+            confirm_reset_stats: None,
             toast: None,
             last_poll: Instant::now(),
         };
@@ -709,6 +732,7 @@ impl QwertoneApp {
                     e.note_on(note, self.velocity());
                 }
                 self.sounding.insert(key, note);
+                self.count_note();
                 self.learn_event(crate::learn::ear::Played::Note(note));
                 self.song_event(crate::song::practice::Played::Note(note));
             }
@@ -719,6 +743,7 @@ impl QwertoneApp {
                 self.chord_keys.push((key, c));
                 self.chord_latched = false;
                 self.play_chord(c, true);
+                self.count_note();
                 if let Some(ev) = self.chord_event() {
                     self.learn_event(ev);
                 }
@@ -739,6 +764,7 @@ impl QwertoneApp {
                 });
                 self.last_drum = Some((d, Instant::now()));
                 self.drum_hits.insert(d, Instant::now());
+                self.count_note();
                 self.song_event(crate::song::practice::Played::Drum(d));
             }
             Action::Sustain => {
@@ -1030,6 +1056,11 @@ impl QwertoneApp {
             self.cfg_watch.sync();
         }
 
+        // Practice stats, every 30 s at most.
+        if let Err(e) = self.stats.maybe_save(false) {
+            self.notify(format!("Couldn't save practice stats: {e}"));
+        }
+
         // Device changes.
         let dev = self.device.lock().unwrap().clone();
         if dev.as_ref().map(|d| &d.sink) != self.current_device.as_ref().map(|d| &d.sink) {
@@ -1053,7 +1084,16 @@ impl QwertoneApp {
                             self.cfg.midi_out_song,
                             self.cfg.midi_out_local,
                         );
+                    let look_changed = (cfg.theme.as_str(), cfg.follow_system_theme, cfg.ui_scale)
+                        != (
+                            self.cfg.theme.as_str(),
+                            self.cfg.follow_system_theme,
+                            self.cfg.ui_scale,
+                        );
                     self.cfg = cfg;
+                    if look_changed {
+                        self.apply_theme(ctx);
+                    }
                     if midi_changed && !restart {
                         self.apply_midi_out();
                     }
@@ -1176,11 +1216,20 @@ impl QwertoneApp {
                 (Tab::Song, "Song"),
                 (Tab::Listen, "Listen"),
                 (Tab::Spotify, "Spotify"),
-                (Tab::Keybinds, "Keybinds"),
-                (Tab::Audio, "Audio & latency"),
-                (Tab::KeyTest, "Keyboard test"),
+                (Tab::Progress, "Progress"),
+                (Tab::General, "Settings"),
             ] {
-                let selected = self.tab == tab;
+                let selected = self.tab == tab || (tab.is_settings() && self.tab.is_settings());
+                // The Settings button reopens the settings page you were on.
+                let tab = if tab.is_settings() {
+                    if self.tab.is_settings() {
+                        self.tab
+                    } else {
+                        self.settings_page
+                    }
+                } else {
+                    tab
+                };
                 let text = RichText::new(label).size(15.0).color(if selected {
                     p.on_secondary_container
                 } else {
@@ -1225,6 +1274,7 @@ impl QwertoneApp {
                 if self.engine.is_none() {
                     chip(ui, p.error, p.surface, "audio off");
                 }
+                self.streak_chip(ui);
                 if self.loop_ui.midi.is_some() {
                     chip(ui, p.surface_container_high, p.on_surface, "MIDI out");
                 }
@@ -1340,8 +1390,8 @@ impl QwertoneApp {
                 card(&mut cols[0], &p, "Latency test (tap along)", |ui| {
                     ui.label(
                         "Put on the headphones you want to measure. Press Start, then tap Space exactly when you \
-                         HEAR each click. Keep going until it finishes. The app uses this number to line up songs and visuals \
-                         with what you hear (later parts).",
+                         HEAR each click. Keep going until it finishes. Song mode, Jam mode, lyrics and Spotify sync use this \
+                         number to line up the falling notes with what you hear, and to be fair when scoring.",
                     );
                     ui.add_space(4.0);
                     if self.tap.running {
@@ -1420,26 +1470,10 @@ impl QwertoneApp {
                             self.mark_dirty();
                         }
                     }
-                    let mut follow = self.cfg.follow_system_theme;
-                    ui.separator();
-                    if ui.checkbox(&mut follow, "Match end4 / wallpaper colours").changed() {
-                        self.cfg.follow_system_theme = follow;
-                        self.mark_dirty();
-                        if !follow {
-                            self.palette = Palette::default();
-                            theme::apply(ui.ctx(), &self.palette);
-                        } else {
-                            self.theme_watch = None;
-                            self.last_poll = Instant::now() - Duration::from_secs(5);
-                        }
-                    }
                     ui.label(
-                        RichText::new(match &self.theme_file {
-                            Some(f) if self.cfg.follow_system_theme => format!("Colours from {}", f.display()),
-                            _ => "Using the built-in colours".into(),
-                        })
-                        .small()
-                        .color(p.on_surface_variant),
+                        RichText::new("Colours and window size are in Settings → General.")
+                            .small()
+                            .color(p.on_surface_variant),
                     );
                 });
             });
@@ -1740,6 +1774,7 @@ impl eframe::App for QwertoneApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.poll(&ctx);
+        self.sync_zoom(&ctx);
         if self.update_overlay() {
             ctx.request_repaint_after(Duration::from_millis(400));
         }
@@ -1765,9 +1800,16 @@ impl eframe::App for QwertoneApp {
                 Tab::Song => self.song_tab(ui),
                 Tab::Listen => self.listen_tab(ui),
                 Tab::Spotify => self.spotify_tab(ui),
-                Tab::Keybinds => self.keybinds_tab(ui),
-                Tab::Audio => self.audio_tab(ui),
-                Tab::KeyTest => self.keytest_tab(ui),
+                Tab::Progress => self.progress_tab(ui),
+                Tab::General | Tab::Keybinds | Tab::Audio | Tab::KeyTest => {
+                    self.settings_nav(ui);
+                    match self.tab {
+                        Tab::Keybinds => self.keybinds_tab(ui),
+                        Tab::Audio => self.audio_tab(ui),
+                        Tab::KeyTest => self.keytest_tab(ui),
+                        _ => self.general_tab(ui),
+                    }
+                }
             });
 
         // Toast.
@@ -1810,5 +1852,6 @@ impl eframe::App for QwertoneApp {
 
     fn on_exit(&mut self) {
         let _ = self.cfg.save();
+        let _ = self.stats.maybe_save(true);
     }
 }

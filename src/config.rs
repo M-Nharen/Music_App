@@ -51,6 +51,11 @@ pub struct Config {
     pub soundfont: Option<PathBuf>,
     /// Use end4 / Material You colours when available.
     pub follow_system_theme: bool,
+    /// Built-in colour theme when not following end4 (Part 9): violet,
+    /// ocean, forest, light, contrast.
+    pub theme: String,
+    /// Scale the whole window (text and widgets), 0.8–1.6.
+    pub ui_scale: f32,
     /// When a Bluetooth device becomes active, switch to its saved
     /// instrument (pads/strings hide Bluetooth delay well).
     pub bluetooth_auto_instrument: bool,
@@ -118,6 +123,29 @@ pub struct Config {
 
     // ---- Spotify (Part 8).
     pub spotify: SpotifySettings,
+
+    // ---- Practice stats and streaks (Part 9).
+    pub practice: PracticeSettings,
+}
+
+/// Practice goal and streak display (Part 9). The numbers themselves are in
+/// `~/.local/share/qwertone/stats.json` (see `stats.rs`), not here.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct PracticeSettings {
+    /// Daily goal in minutes of active practice.
+    pub goal_minutes: u32,
+    /// Show the streak chip in the header.
+    pub streak_chip: bool,
+}
+
+impl Default for PracticeSettings {
+    fn default() -> Self {
+        Self {
+            goal_minutes: 10,
+            streak_chip: true,
+        }
+    }
 }
 
 /// Spotify (Part 8): a personal developer app, logged in with PKCE. The
@@ -363,6 +391,8 @@ impl Default for Config {
             buffer_frames: 128,
             soundfont: None,
             follow_system_theme: true,
+            theme: "violet".into(),
+            ui_scale: 1.0,
             bluetooth_auto_instrument: true,
             devices: BTreeMap::new(),
             scale: Scale::Major,
@@ -391,6 +421,7 @@ impl Default for Config {
             jam: JamSettings::default(),
             lyrics: LyricsSettings::default(),
             spotify: SpotifySettings::default(),
+            practice: PracticeSettings::default(),
         }
     }
 }
@@ -428,10 +459,21 @@ impl Config {
                     }
                     (c, None)
                 }
-                Err(e) => (
-                    Config::default(),
-                    Some(format!("config.toml has an error, using defaults: {e}")),
-                ),
+                Err(e) => {
+                    // Keep the broken file: the next save would otherwise
+                    // overwrite the user's settings with the defaults.
+                    let backup = path.with_extension("toml.broken");
+                    let kept = std::fs::copy(&path, &backup).is_ok();
+                    let msg = if kept {
+                        format!(
+                            "config.toml has an error, using defaults (your file was kept as {}): {e}",
+                            backup.display()
+                        )
+                    } else {
+                        format!("config.toml has an error, using defaults: {e}")
+                    };
+                    (Config::default(), Some(msg))
+                }
             },
             Err(_) => {
                 let c = Config::default();
@@ -590,7 +632,7 @@ snare = "... x.. ... x.."
 ride  = "x.x x.x x.x x.x"
 "#;
 
-fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     let tmp = path.with_extension("toml.tmp");
     std::fs::write(&tmp, text)?;
     std::fs::rename(tmp, path)
@@ -693,6 +735,11 @@ mod tests {
         // Missing fields fall back to defaults.
         let partial: Config = toml::from_str("volume = 0.5").unwrap();
         assert_eq!(partial.buffer_frames, 128);
+        // Configs from before Part 9 get the new settings' defaults.
+        assert_eq!(partial.theme, "violet");
+        assert_eq!(partial.ui_scale, 1.0);
+        assert_eq!(partial.practice, PracticeSettings::default());
+        assert_eq!(partial.practice.goal_minutes, 10);
     }
 
     #[test]

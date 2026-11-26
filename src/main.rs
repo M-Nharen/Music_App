@@ -13,6 +13,7 @@ mod music;
 mod record;
 mod song;
 mod spotify;
+mod stats;
 #[cfg(test)]
 mod testalloc;
 mod theme;

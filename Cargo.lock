@@ -3128,6 +3128,7 @@ dependencies = [
  "eframe",
  "egui",
  "getrandom 0.3.4",
+ "libc",
  "midly",
  "rustfft",
  "rustysynth",

@@ -1254,6 +1254,13 @@ impl QwertoneApp {
             return;
         }
         let acc = score.accuracy().round() as u32;
+        let title = self
+            .song_ui
+            .song
+            .as_ref()
+            .map(|s| s.metadata.title.clone())
+            .unwrap_or_default();
+        self.stats.song_done(&id, &title, acc);
         let best = self.cfg.song.best.get(&id).copied().unwrap_or(0);
         let new_best = acc > best && self.song_ui.speed >= 0.999 && !self.cfg.song.one_key;
         if new_best {

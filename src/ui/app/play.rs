@@ -215,21 +215,47 @@ impl QwertoneApp {
             if idx != self.cfg.instrument {
                 self.set_instrument(idx);
             }
+            // Octave − / + (also on keys).
+            ui.spacing_mut().item_spacing.x = 4.0;
+            if ui
+                .add_enabled(self.cfg.octave > -3, egui::Button::new("−").small())
+                .on_hover_text(format!("Octave down ({})", self.keys_text(Action::OctaveDown)))
+                .clicked()
+            {
+                self.cfg.octave -= 1;
+                self.mark_dirty();
+                self.refresh_chord();
+            }
             chip(
                 ui,
                 p.surface_container_high,
                 p.on_surface,
                 format!("Octave {:+}", self.cfg.octave),
             );
+            if ui
+                .add_enabled(self.cfg.octave < 3, egui::Button::new("+").small())
+                .on_hover_text(format!("Octave up ({})", self.keys_text(Action::OctaveUp)))
+                .clicked()
+            {
+                self.cfg.octave += 1;
+                self.mark_dirty();
+                self.refresh_chord();
+            }
+            ui.spacing_mut().item_spacing.x = 10.0;
             if has_notes {
                 self.key_picker(ui);
             }
-            chip(
-                ui,
-                p.surface_container_high,
-                p.on_surface,
-                format!("Velocity: {}", VELOCITIES[self.cfg.velocity.min(2)].1),
-            );
+            if ui
+                .button(format!("Velocity: {}", VELOCITIES[self.cfg.velocity.min(2)].1))
+                .on_hover_text(format!(
+                    "How hard notes are played. Click or press {} to change.",
+                    self.keys_text(Action::Velocity)
+                ))
+                .clicked()
+            {
+                self.cfg.velocity = (self.cfg.velocity + 1) % 3;
+                self.mark_dirty();
+            }
             let (sf, sc) = if self.sustain_on {
                 (p.primary, p.on_primary)
             } else {

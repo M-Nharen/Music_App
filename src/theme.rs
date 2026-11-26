@@ -59,6 +59,127 @@ impl Default for Palette {
     }
 }
 
+/// Built-in colour themes (Part 9): (config id, name, palette). Used when
+/// "Match end4 colours" is off or end4 isn't installed.
+pub fn builtin_themes() -> [(&'static str, &'static str, Palette); 5] {
+    [
+        ("violet", "Violet (dark)", Palette::default()),
+        (
+            "ocean",
+            "Ocean (dark)",
+            Palette {
+                primary: hex(0x8FCDFF),
+                on_primary: hex(0x00344F),
+                primary_container: hex(0x004C70),
+                on_primary_container: hex(0xCAE6FF),
+                secondary_container: hex(0x384956),
+                on_secondary_container: hex(0xD3E5F5),
+                tertiary: hex(0xA6F0D8),
+                tertiary_container: hex(0x2C5348),
+                surface: hex(0x0F1418),
+                surface_container_low: hex(0x171C20),
+                surface_container: hex(0x1B2024),
+                surface_container_high: hex(0x252B2F),
+                surface_container_highest: hex(0x30363A),
+                on_surface: hex(0xDEE3E8),
+                on_surface_variant: hex(0xC1C7CE),
+                outline: hex(0x8B9198),
+                outline_variant: hex(0x41484D),
+                error: hex(0xFFB4AB),
+            },
+        ),
+        (
+            "forest",
+            "Forest (dark)",
+            Palette {
+                primary: hex(0xA4D397),
+                on_primary: hex(0x10380B),
+                primary_container: hex(0x275020),
+                on_primary_container: hex(0xBFF0B1),
+                secondary_container: hex(0x3B4B37),
+                on_secondary_container: hex(0xD7E8CD),
+                tertiary: hex(0xF0C48A),
+                tertiary_container: hex(0x5E4318),
+                surface: hex(0x111410),
+                surface_container_low: hex(0x191D17),
+                surface_container: hex(0x1D211B),
+                surface_container_high: hex(0x272B25),
+                surface_container_highest: hex(0x32362F),
+                on_surface: hex(0xE1E4DA),
+                on_surface_variant: hex(0xC3C8BB),
+                outline: hex(0x8D9286),
+                outline_variant: hex(0x43483F),
+                error: hex(0xFFB4AB),
+            },
+        ),
+        (
+            "light",
+            "Light",
+            Palette {
+                primary: hex(0x65558F),
+                on_primary: hex(0xFFFFFF),
+                primary_container: hex(0xE9DDFF),
+                on_primary_container: hex(0x22005D),
+                secondary_container: hex(0xE8DEF8),
+                on_secondary_container: hex(0x1D192B),
+                tertiary: hex(0x7E5260),
+                tertiary_container: hex(0xFFD9E3),
+                surface: hex(0xFEF7FF),
+                surface_container_low: hex(0xF7F2FA),
+                surface_container: hex(0xF3EDF7),
+                surface_container_high: hex(0xECE6F0),
+                surface_container_highest: hex(0xE6E0E9),
+                on_surface: hex(0x1D1B20),
+                on_surface_variant: hex(0x49454F),
+                outline: hex(0x7A757F),
+                outline_variant: hex(0xCAC4D0),
+                error: hex(0xB3261E),
+            },
+        ),
+        (
+            "contrast",
+            "High contrast",
+            Palette {
+                primary: hex(0xFFE066),
+                on_primary: hex(0x000000),
+                primary_container: hex(0x5C4A00),
+                on_primary_container: hex(0xFFFFFF),
+                secondary_container: hex(0x3A3A3A),
+                on_secondary_container: hex(0xFFFFFF),
+                tertiary: hex(0x7FE7FF),
+                tertiary_container: hex(0x00505E),
+                surface: hex(0x000000),
+                surface_container_low: hex(0x0E0E0E),
+                surface_container: hex(0x161616),
+                surface_container_high: hex(0x242424),
+                surface_container_highest: hex(0x333333),
+                on_surface: hex(0xFFFFFF),
+                on_surface_variant: hex(0xE6E6E6),
+                outline: hex(0xBDBDBD),
+                outline_variant: hex(0x6E6E6E),
+                error: hex(0xFF8A80),
+            },
+        ),
+    ]
+}
+
+/// A built-in theme by config id (unknown ids get the default).
+pub fn builtin_palette(id: &str) -> Palette {
+    builtin_themes()
+        .into_iter()
+        .find(|(i, _, _)| *i == id)
+        .map(|(_, _, p)| p)
+        .unwrap_or_default()
+}
+
+impl Palette {
+    /// A light background (pick egui's light visuals underneath).
+    pub fn is_light(&self) -> bool {
+        let [r, g, b, _] = self.surface.to_array();
+        0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32 > 128.0
+    }
+}
+
 /// Where end4 writes its generated colours (newest first).
 pub fn candidate_paths() -> Vec<PathBuf> {
     let mut v = Vec::new();
@@ -163,7 +284,11 @@ pub fn load_system_palette() -> Option<(Palette, PathBuf)> {
 }
 
 pub fn apply(ctx: &egui::Context, p: &Palette) {
-    let mut v = Visuals::dark();
+    let mut v = if p.is_light() {
+        Visuals::light()
+    } else {
+        Visuals::dark()
+    };
     let r = CornerRadius::same(14);
     v.override_text_color = Some(p.on_surface);
     v.panel_fill = p.surface;
@@ -335,6 +460,24 @@ mod tests {
         assert_eq!(p.primary, hex(0xa8c7ff));
         assert_eq!(p.surface, hex(0x111318));
         assert_eq!(p.on_surface, hex(0xe2e2e9));
+    }
+
+    #[test]
+    fn builtin_themes_are_distinct_and_readable() {
+        let themes = builtin_themes();
+        let ids: std::collections::HashSet<_> = themes.iter().map(|t| t.0).collect();
+        assert_eq!(ids.len(), themes.len());
+        assert_eq!(builtin_palette("nope"), Palette::default());
+        assert!(builtin_palette("light").is_light());
+        assert!(!builtin_palette("violet").is_light());
+        // Text must stand out from the background in every theme.
+        let lum = |c: Color32| {
+            let [r, g, b, _] = c.to_array();
+            0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32
+        };
+        for (id, _, p) in themes {
+            assert!((lum(p.on_surface) - lum(p.surface)).abs() > 120.0, "{id}");
+        }
     }
 
     #[test]

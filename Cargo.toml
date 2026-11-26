@@ -17,6 +17,8 @@ anyhow = "1.0.105"
 # Spotify (Part 8): PKCE (sha256 + base64url of OS randomness) and HTTPS.
 base64 = "0.22"
 getrandom = "0.3"
+# Local date for practice streaks (Part 9): localtime_r.
+libc = "0.2"
 sha2 = "0.10"
 ureq = { version = "3", default-features = false, features = ["rustls", "gzip"] }
 # FLAC decoding for the analyzer's stems (Jam mode, Part 7).
