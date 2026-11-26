@@ -109,6 +109,16 @@ pub enum Action {
     TapTempo,
     /// Start recording (with count-in) / stop and save a MIDI file.
     Record,
+    /// Looper: record the first layer / close it / overdub / finish overdub.
+    Loop,
+    /// Looper: play / stop.
+    LoopPlay,
+    /// Looper: undo the last layer (or the one being recorded).
+    LoopUndo,
+    /// Looper: clear every layer (press twice).
+    LoopClear,
+    /// Looper: mute / unmute layer N (1-based).
+    LoopMute(u8),
 }
 
 /// Broad groups, for sorting and the keybind editor.
@@ -145,6 +155,13 @@ impl Action {
         if let Some(rest) = arg("drum") {
             return crate::drums::parse(rest).map(Action::Drum);
         }
+        if let Some(rest) = arg("loop-mute") {
+            return rest
+                .parse()
+                .ok()
+                .filter(|n| (1..=crate::audio::looper::MAX_LAYERS as u8).contains(n))
+                .map(Action::LoopMute);
+        }
         Some(match s {
             "octave+" => Action::OctaveUp,
             "octave-" => Action::OctaveDown,
@@ -166,6 +183,10 @@ impl Action {
             "metronome" => Action::Metronome,
             "tap-tempo" => Action::TapTempo,
             "record" => Action::Record,
+            "loop" => Action::Loop,
+            "loop-play" => Action::LoopPlay,
+            "loop-undo" => Action::LoopUndo,
+            "loop-clear" => Action::LoopClear,
             _ => return None,
         })
     }
@@ -209,11 +230,16 @@ impl Action {
             Action::Metronome => "Metronome on / off".into(),
             Action::TapTempo => "Tap tempo (tap in time)".into(),
             Action::Record => "Record / stop + save MIDI".into(),
+            Action::Loop => "Loop: record / overdub".into(),
+            Action::LoopPlay => "Loop: play / stop".into(),
+            Action::LoopUndo => "Loop: undo last layer".into(),
+            Action::LoopClear => "Loop: clear all (press twice)".into(),
+            Action::LoopMute(n) => format!("Loop: mute layer {n}"),
         }
     }
 
     /// Every control action (not notes/chords/drums), for menus.
-    pub const CONTROLS: [Action; 20] = [
+    pub const CONTROLS: [Action; 28] = [
         Action::Sustain,
         Action::OctaveUp,
         Action::OctaveDown,
@@ -234,6 +260,14 @@ impl Action {
         Action::Metronome,
         Action::TapTempo,
         Action::Record,
+        Action::Loop,
+        Action::LoopPlay,
+        Action::LoopUndo,
+        Action::LoopClear,
+        Action::LoopMute(1),
+        Action::LoopMute(2),
+        Action::LoopMute(3),
+        Action::LoopMute(4),
     ];
 }
 
@@ -265,6 +299,11 @@ impl fmt::Display for Action {
             Action::Metronome => f.write_str("metronome"),
             Action::TapTempo => f.write_str("tap-tempo"),
             Action::Record => f.write_str("record"),
+            Action::Loop => f.write_str("loop"),
+            Action::LoopPlay => f.write_str("loop-play"),
+            Action::LoopUndo => f.write_str("loop-undo"),
+            Action::LoopClear => f.write_str("loop-clear"),
+            Action::LoopMute(n) => write!(f, "loop-mute {n}"),
         }
     }
 }
@@ -286,6 +325,14 @@ const RECORD_KEYS: [(Key, Action); 5] = [
     (Key::F7, Action::TempoDown),
     (Key::F8, Action::TempoUp),
     (Key::F9, Action::Record),
+];
+
+/// Default looper keys (Part 4b).
+const LOOP_KEYS: [(Key, Action); 4] = [
+    (Key::F10, Action::Loop),
+    (Key::F11, Action::LoopPlay),
+    (Key::F12, Action::LoopUndo),
+    (Key::Delete, Action::LoopClear),
 ];
 
 /// The layouts that ship with the app: (file name, display name).
@@ -379,7 +426,8 @@ impl Keymap {
              #   mod 7th|sus4|add9|swap   hold to change the chord\n\
              #   drum <name or number> kick, snare, clap, rim, hat, openhat, crash, ride, …\n\
              #   sustain, octave+, octave-, transpose+, transpose-, instrument+, instrument-,\n\
-             #   velocity, panic, rhythm, style+, style-, tempo+, tempo-, scale+, scale-lock, layout+\n\n{body}"
+             #   velocity, panic, rhythm, style+, style-, tempo+, tempo-, scale+, scale-lock, layout+,\n\
+             #   metronome, tap-tempo, record, loop, loop-play, loop-undo, loop-clear, loop-mute <1-8>\n\n{body}"
         )
     }
 
@@ -444,6 +492,19 @@ impl Keymap {
         changed
     }
 
+    /// Part 4b looper keys for older saved layouts, where free.
+    pub fn ensure_loop_keys(&mut self) -> bool {
+        let mut changed = false;
+        for (k, a) in LOOP_KEYS {
+            let id = KeyId::Key(k);
+            if self.keys_for(a).is_empty() && self.get(id).is_none() {
+                self.bind(id, a);
+                changed = true;
+            }
+        }
+        changed
+    }
+
     fn with_controls(mut b: HashMap<KeyId, Action>) -> HashMap<KeyId, Action> {
         use Key::*;
         for (k, a) in [
@@ -460,6 +521,7 @@ impl Keymap {
         ]
         .into_iter()
         .chain(RECORD_KEYS)
+        .chain(LOOP_KEYS)
         {
             b.entry(KeyId::Key(k)).or_insert(a);
         }
@@ -764,6 +826,9 @@ mod tests {
         );
         assert_eq!(Action::parse("drum kick"), Some(Action::Drum(36)));
         assert_eq!(Action::parse("drum 38"), Some(Action::Drum(38)));
+        assert_eq!(Action::parse("loop-mute 7"), Some(Action::LoopMute(7)));
+        assert_eq!(Action::parse("loop-mute 9"), None);
+        assert_eq!(Action::LoopMute(7).to_string(), "loop-mute 7");
         assert_eq!(Action::parse("notes 3"), None);
         assert_eq!(Action::parse("bogus"), None);
         for a in Action::CONTROLS {
@@ -804,5 +869,15 @@ mod tests {
         assert!(km.ensure_record_keys());
         assert!(!km.ensure_record_keys());
         assert_eq!(km.get(KeyId::Key(Key::F9)), Some(Action::Record));
+        for (k, _) in LOOP_KEYS {
+            km.unbind(KeyId::Key(k));
+        }
+        // A key the user gave something else stays theirs.
+        km.bind(KeyId::Key(Key::F12), Action::Panic);
+        assert!(km.ensure_loop_keys());
+        assert!(!km.ensure_loop_keys());
+        assert_eq!(km.get(KeyId::Key(Key::F10)), Some(Action::Loop));
+        assert_eq!(km.get(KeyId::Key(Key::F12)), Some(Action::Panic));
+        assert!(km.keys_for(Action::LoopUndo).is_empty());
     }
 }

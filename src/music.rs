@@ -138,6 +138,87 @@ pub const INSTRUMENTS: &[Instrument] = &[
         program: 21,
         bt_friendly: true,
     },
+    // Added in Part 4b.
+    Instrument {
+        name: "Harpsichord",
+        program: 6,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Celesta",
+        program: 8,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Xylophone",
+        program: 13,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Kalimba",
+        program: 108,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Steel Drums",
+        program: 114,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Clean Electric Guitar",
+        program: 27,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Sitar",
+        program: 104,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Violin",
+        program: 40,
+        bt_friendly: true,
+    },
+    Instrument {
+        name: "Cello",
+        program: 42,
+        bt_friendly: true,
+    },
+    Instrument {
+        name: "Pizzicato Strings",
+        program: 45,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Trumpet",
+        program: 56,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Brass Section",
+        program: 61,
+        bt_friendly: false,
+    },
+    Instrument {
+        name: "Alto Sax",
+        program: 65,
+        bt_friendly: true,
+    },
+    Instrument {
+        name: "Clarinet",
+        program: 71,
+        bt_friendly: true,
+    },
+    Instrument {
+        name: "Pan Flute",
+        program: 75,
+        bt_friendly: true,
+    },
+    Instrument {
+        name: "Shehnai",
+        program: 111,
+        bt_friendly: true,
+    },
 ];
 
 /// Sounds for the accompaniment bass line.
@@ -239,6 +320,41 @@ mod tests {
         assert_eq!(chord_name(&[64, 67, 72]).as_deref(), Some("C/E"));
         assert_eq!(chord_name(&[55, 59, 62, 65]).as_deref(), Some("G7"));
         assert_eq!(chord_name(&[60]), None);
+    }
+
+    #[test]
+    fn instrument_list_only_grows() {
+        // Saved configs store indices: the old entries must not move.
+        let old = [
+            "Grand Piano",
+            "Bright Piano",
+            "Electric Piano",
+            "Music Box",
+            "Vibraphone",
+            "Organ",
+            "Nylon Guitar",
+            "Strings",
+            "Slow Strings",
+            "Choir",
+            "Flute",
+            "Square Lead",
+            "Saw Lead",
+            "Warm Pad",
+            "Polysynth Pad",
+            "Halo Pad",
+            "Steel Guitar",
+            "Harp",
+            "Marimba",
+            "Accordion",
+        ];
+        for (i, name) in old.iter().enumerate() {
+            assert_eq!(INSTRUMENTS[i].name, *name);
+        }
+        let mut names: Vec<_> = INSTRUMENTS.iter().map(|i| i.name).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), INSTRUMENTS.len(), "no duplicates");
+        assert!(INSTRUMENTS.iter().all(|i| i.program < 128));
     }
 
     #[test]

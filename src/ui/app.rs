@@ -4,6 +4,7 @@
 mod keybinds;
 mod learn;
 mod listen;
+mod looper;
 mod play;
 mod record;
 mod song;
@@ -118,6 +119,8 @@ pub struct QwertoneApp {
     // Latency test.
     tap: TapTest,
     rec: record::RecordUi,
+    /// Looper + MIDI out (Part 4b).
+    loop_ui: looper::LoopUi,
     tap_result: Option<TapResult>,
 
     // Keyboard ghosting test.
@@ -197,6 +200,7 @@ impl QwertoneApp {
             rename_focus: false,
             tap: TapTest::default(),
             rec: record::RecordUi::default(),
+            loop_ui: looper::LoopUi::default(),
             tap_result: None,
             max_held: 0,
             best_combo: Vec::new(),
@@ -230,6 +234,8 @@ impl QwertoneApp {
                 self.load_soundfont(self.cfg.soundfont.clone());
                 // A new audio thread has no song: hand it over again.
                 self.song_resend();
+                // ... nor MIDI out (a loop doesn't survive a restart).
+                self.apply_midi_out();
             }
             Err(e) => {
                 self.engine_error = Some(format!("{e:#}"));
@@ -752,7 +758,10 @@ impl QwertoneApp {
                 self.cfg.velocity = (self.cfg.velocity + 1) % 3;
                 self.mark_dirty();
             }
-            Action::Panic => self.all_notes_off(),
+            Action::Panic => {
+                self.all_notes_off();
+                self.send(Command::Loop(crate::audio::looper::LoopCommand::Stop));
+            }
             Action::StyleNext => self.set_style(self.style_index() + 1),
             Action::StylePrev => {
                 let n = self.styles().len();
@@ -790,6 +799,11 @@ impl QwertoneApp {
             Action::Metronome => self.toggle_metronome(),
             Action::TapTempo => self.tap_tempo(),
             Action::Record => self.toggle_record(),
+            Action::Loop => self.loop_rec(),
+            Action::LoopPlay => self.loop_play(),
+            Action::LoopUndo => self.loop_undo(),
+            Action::LoopClear => self.loop_clear(),
+            Action::LoopMute(n) => self.loop_mute(n),
         }
         true
     }
@@ -1022,7 +1036,16 @@ impl QwertoneApp {
                 } else {
                     let restart = cfg.buffer_frames != self.cfg.buffer_frames;
                     let keymap_changed = cfg.keymap != self.keymap_file;
+                    let midi_changed = (cfg.midi_out, cfg.midi_out_song, cfg.midi_out_local)
+                        != (
+                            self.cfg.midi_out,
+                            self.cfg.midi_out_song,
+                            self.cfg.midi_out_local,
+                        );
                     self.cfg = cfg;
+                    if midi_changed && !restart {
+                        self.apply_midi_out();
+                    }
                     self.send(Command::Program(self.instrument().program));
                     self.send(Command::Volume(self.cfg.volume));
                     self.send_programs();
@@ -1189,6 +1212,9 @@ impl QwertoneApp {
                 }
                 if self.engine.is_none() {
                     chip(ui, p.error, p.surface, "audio off");
+                }
+                if self.loop_ui.midi.is_some() {
+                    chip(ui, p.surface_container_high, p.on_surface, "MIDI out");
                 }
             });
         });
@@ -1396,6 +1422,8 @@ impl QwertoneApp {
                     );
                 });
             });
+            ui.add_space(8.0);
+            self.midi_card(ui);
             ui.add_space(8.0);
             card(ui, &p, "Saved devices", |ui| self.saved_devices(ui));
         });

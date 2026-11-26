@@ -8,6 +8,7 @@ mod keymap;
 mod latency;
 mod learn;
 mod listen;
+mod midiout;
 mod music;
 mod record;
 mod song;

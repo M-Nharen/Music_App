@@ -98,6 +98,17 @@ pub struct Config {
     // ---- Metronome + recording (Part 4a).
     /// Beats of clicks before a recording starts (0 = none).
     pub count_in_beats: u32,
+
+    // ---- Looper + MIDI out (Part 4b).
+    /// Length of a new loop in bars (0 = free: press the loop key again
+    /// to close it at the nearest bar line).
+    pub loop_bars: u32,
+    /// Send what you play to the "Qwertone" virtual MIDI port.
+    pub midi_out: bool,
+    /// Send the song backing (Song mode) too.
+    pub midi_out_song: bool,
+    /// Keep playing the sound here while MIDI out is on.
+    pub midi_out_local: bool,
 }
 
 /// Song mode and live listen settings, plus best scores.
@@ -219,6 +230,10 @@ impl Default for Config {
             learn: LearnProgress::default(),
             song: SongSettings::default(),
             count_in_beats: 4,
+            loop_bars: 4,
+            midi_out: false,
+            midi_out_song: false,
+            midi_out_local: true,
         }
     }
 }
@@ -293,6 +308,8 @@ pub fn load_keymap(name: &str) -> (Keymap, Vec<String>) {
                 let mut changed = !text.contains("layout+") && km.ensure_layout_key();
                 // ... and the Part 4a metronome / record keys.
                 changed |= !text.contains("metronome") && km.ensure_record_keys();
+                // ... and the Part 4b looper keys.
+                changed |= !text.contains("loop-play") && km.ensure_loop_keys();
                 if changed {
                     let _ = write_atomic(&path, &km.to_toml());
                 }

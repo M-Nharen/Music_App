@@ -105,17 +105,41 @@ It follows your instrument and lights up whatever is playing (melody in one colo
 | Instrument | Picture |
 |---|---|
 | Pianos, organ, electric piano, mallets, harp | Keyboard |
-| Guitars | Guitar fretboard (standard tuning), with a playable hand position for each chord |
+| Guitars, sitar | Guitar fretboard (standard tuning), with a playable hand position for each chord |
 | Strings | Violin or cello fingerboard (cello when the music is low), with beginner finger-tape lines |
 | Flute | 6-hole fingering diagram (● covered, ◐ half, ○ open) for the note you're playing |
 | Drums layout | Drum pads that flash when hit |
-| Pads, synths, choir | A glowing waveform of the notes |
+| Pads, synths, choir, brass, sax, clarinet, shehnai | A glowing waveform of the notes |
 
 The **View** menu above it lets you pick any picture instead. Dots on the fretboards mark the notes of the current scale.
 
 ### Key and scale
 
 The **Key** and **Scale** pickers on the Play tab apply to every layout. Keys get a • if their note is in the scale and a ★ on the key's home note. **Scale lock** makes piano/isomorphic keys play the nearest scale note instead, so nothing sounds wrong.
+
+### Instruments
+
+**PageUp / PageDown** (or the picker) step through 36 sounds: pianos, harpsichord, celesta, music box, mallets (vibraphone, marimba, xylophone, kalimba, steel drums), organ, accordion, guitars (nylon, steel, clean electric), sitar, harp, strings (ensemble, violin, cello, pizzicato), choir, brass (trumpet, brass section), reeds (alto sax, clarinet, shehnai), flutes (flute, pan flute), synth leads and pads. With a SoundFont they use its General MIDI sounds; the built-in synth has a rough version of each family.
+
+### Metronome, recording and the looper
+
+The two bars under the chord panel on the Play tab:
+
+- **Metronome** (F5), **tempo** (F7/F8, or drag), **Tap** (F6: tap in time to set the tempo), **Record** (F9): clicks in for 4 beats, records everything you play and saves `~/Music/qwertone/take-001.mid` when you press it again.
+- **Looper** (F10): clicks in, then records a loop of the length you picked (1–16 bars, or *Free*: press F10 again when you're done and it closes at the nearest bar line). The loop then plays round and round in time with the metronome.
+  - **F10** again starts an **overdub**: play on top while it loops, press F10 to keep that layer. Up to 8 layers.
+  - **F11** stops / plays the loop, **F12** undoes the last layer, **Delete** twice clears everything. Click a layer's chip to mute it.
+  - Each layer keeps the instrument it was recorded with: record a piano layer, switch to strings (PageUp) and overdub.
+  - Changing the tempo speeds the whole loop up or slows it down. Escape stops the loop; switching windows doesn't.
+  - Press Record (F9) while a loop plays and the take starts at the top of the loop, with the loop in it.
+
+All of these keys can be changed on the Keybinds tab (`loop`, `loop-play`, `loop-undo`, `loop-clear`, `loop-mute 1`…).
+
+### MIDI out to other apps
+
+**Audio & latency → Virtual MIDI out → Send MIDI out** opens a MIDI port called **Qwertone**. Everything you play (notes, chords, bass, drums, loop layers; the song backing too if you tick it) goes out there, timed like the sound, so you can record it in a DAW or play it through another synth. It's an ALSA sequencer port, so ALSA apps see it directly and PipeWire shows it through its MIDI bridge (connect it in qpwgraph or Helvum, or `aconnect Qwertone:0 <synth>`). Untick *Also play the sound here* to hear only the other app.
+
+Channels: 1 melody, 2 chords, 3 bass, 10 drums; loop layers get their own channels from 16 downwards.
 
 ## Learn
 
@@ -201,6 +225,8 @@ Actions:
 | `drum <name>` | `kick`, `snare`, `clap`, `rim`, `hat`, `pedalhat`, `openhat`, `ride`, `bell`, `crash`, `splash`, `china`, `lowtom`, `midtom`, `hitom`, `floortom`, `tamb`, `shaker`, `cowbell`, `claves`, `conga`, `bongo` … or a General MIDI number |
 | `sustain`, `octave+`, `octave-`, `transpose+`, `transpose-`, `instrument+`, `instrument-`, `velocity`, `panic` | As in Part 1 |
 | `rhythm`, `style+`, `style-`, `tempo+`, `tempo-`, `scale+`, `scale-lock`, `layout+` | Accompaniment and layout controls |
+| `metronome`, `tap-tempo`, `record` | Metronome on/off, tap tempo, record / stop + save |
+| `loop`, `loop-play`, `loop-undo`, `loop-clear`, `loop-mute <1-8>` | Looper: record / overdub, play / stop, undo layer, clear (press twice), mute a layer |
 
 **Reset to…** restores any layout to one of the four built-in ones.
 
@@ -240,6 +266,7 @@ Bluetooth adds roughly 150–250 ms of delay. That comes from the earbuds and th
 - **No sound:** check the Audio engine card for an error, then click **Restart audio**. Make sure PipeWire is running: `systemctl --user status pipewire`.
 - **Output card says it can't ask PipeWire:** install `libpulse` (it provides `pactl`).
 - **Some keys don't light up when held together:** that's your laptop keyboard (ghosting). Check it in the **Keyboard test** tab.
+- **MIDI out says it can't open the ALSA sequencer:** load the module once with `sudo modprobe snd-seq` (to keep it, add `snd-seq` to `/etc/modules-load.d/snd-seq.conf`).
 - **Build fails on `pipewire`/`bindgen`:** install `clang`, or build without the native PipeWire backend: `cargo run --release --no-default-features`.
 
 ## Project layout
@@ -263,9 +290,13 @@ src/
                 and key guessing, practice (targets, timing, wait, scoring),
                 the auto song layout, the note editor, running the analyzer
   audio/songplay.rs   song playback in the audio thread (speed, loops, wait)
+  audio/looper.rs     the looper (layers, overdub, mute) in the audio thread
+  record.rs     recording takes to MIDI files, tap tempo
+  midiout.rs    virtual MIDI out (ALSA sequencer port + timing thread)
   listen/       live listen: audio input + chord / note / pitch detection
   ui/           egui app (app.rs, app/play.rs, app/learn.rs, app/song.rs,
-                app/listen.rs, app/keybinds.rs), custom widgets, circle.rs,
+                app/listen.rs, app/keybinds.rs, app/record.rs, app/looper.rs),
+                custom widgets, circle.rs,
                 song_view.rs (falling notes, chord sheet, timeline, piano roll),
                 visuals.rs (keyboard / fretboard / fingerboard / flute / pads / waveform)
 analyzer/       the Python song analyzer (see analyzer/README.md)

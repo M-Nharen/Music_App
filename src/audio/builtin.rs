@@ -81,6 +81,76 @@ fn patch_for_program(program: u8) -> Patch {
             brightness_decay: 0.0,
             detune_cents: 6.0,
         },
+        // Part 4b: plucked strings (pizzicato, harp).
+        45 | 46 => Patch {
+            attack: 0.002,
+            decay: if program == 46 { 1.3 } else { 0.45 },
+            sustain: 0.0,
+            release: 0.25,
+            harmonics: [1.0, 0.4, 0.2, 0.1, 0.05, 0.02],
+            brightness_decay: 5.0,
+            detune_cents: 1.0,
+        },
+        // Bowed strings (violin, viola, cello…): a bright saw-like tone.
+        40..=44 => Patch {
+            attack: 0.06,
+            decay: 0.3,
+            sustain: 0.85,
+            release: 0.25,
+            harmonics: [1.0, 0.5, 0.33, 0.25, 0.2, 0.16],
+            brightness_decay: 0.0,
+            detune_cents: 4.0,
+        },
+        // Brass: brassy, all harmonics strong.
+        56..=63 => Patch {
+            attack: 0.03,
+            decay: 0.2,
+            sustain: 0.8,
+            release: 0.12,
+            harmonics: [1.0, 0.8, 0.6, 0.45, 0.35, 0.25],
+            brightness_decay: 0.0,
+            detune_cents: 3.0,
+        },
+        // Clarinet: hollow, mostly odd harmonics.
+        71 => Patch {
+            attack: 0.025,
+            decay: 0.2,
+            sustain: 0.85,
+            release: 0.1,
+            harmonics: [1.0, 0.05, 0.6, 0.05, 0.35, 0.05],
+            brightness_decay: 0.0,
+            detune_cents: 0.0,
+        },
+        // Saxes, oboe, bassoon; shehnai, bagpipe, fiddle: reedy.
+        64..=70 | 109..=111 => Patch {
+            attack: 0.025,
+            decay: 0.2,
+            sustain: 0.85,
+            release: 0.12,
+            harmonics: [1.0, 0.75, 0.55, 0.4, 0.3, 0.2],
+            brightness_decay: 0.0,
+            detune_cents: 2.0,
+        },
+        // Sitar, banjo, shamisen, koto: bright buzzy pluck.
+        104..=107 => Patch {
+            attack: 0.002,
+            decay: 1.5,
+            sustain: 0.0,
+            release: 0.3,
+            harmonics: [1.0, 0.8, 0.7, 0.6, 0.5, 0.45],
+            brightness_decay: 2.5,
+            detune_cents: 3.0,
+        },
+        // Kalimba, steel drums and other tuned percussion: like mallets.
+        108 | 112..=119 => Patch {
+            attack: 0.001,
+            decay: 0.9,
+            sustain: 0.0,
+            release: 0.25,
+            harmonics: [1.0, 0.0, 0.3, 0.0, 0.08, 0.0],
+            brightness_decay: 4.0,
+            detune_cents: 0.0,
+        },
         // Strings, choir, pads, flute: slow soft attack (Bluetooth friendly).
         _ => Patch {
             attack: 0.12,
@@ -446,6 +516,33 @@ mod tests {
             s.render(&mut l, &mut r);
         }
         assert_eq!(s.active_voices(), 0, "drum hits finish on their own");
+    }
+
+    #[test]
+    fn every_instrument_sounds_and_stops() {
+        for ins in crate::music::INSTRUMENTS {
+            let mut s = BuiltinSynth::new(48_000);
+            s.set_program(0, ins.program);
+            s.note_on(0, 60, 100);
+            let mut l = vec![0.0; 4800];
+            let mut r = vec![0.0; 4800];
+            s.render(&mut l, &mut r);
+            assert!(l.iter().any(|x| x.abs() > 0.01), "{} is silent", ins.name);
+            assert!(l.iter().all(|x| x.abs() <= 1.0), "{} clips", ins.name);
+            s.note_off(0, 60);
+            for _ in 0..40 {
+                s.render(&mut l, &mut r);
+            }
+            assert_eq!(s.active_voices(), 0, "{} hangs on", ins.name);
+        }
+        // The new families really get their own sound.
+        let attack = |p: u8| patch_for_program(p).attack;
+        assert!(attack(104) < 0.01, "sitar is plucked");
+        assert!(attack(46) < 0.01, "harp is plucked");
+        assert!(
+            attack(40) < attack(48),
+            "violin speaks faster than a string pad"
+        );
     }
 
     #[test]

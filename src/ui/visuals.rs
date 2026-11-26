@@ -64,10 +64,10 @@ impl Visual {
     pub fn for_program(program: u8) -> Visual {
         match program {
             46 => Visual::Keyboard, // harp: strings laid out like a keyboard
-            24..=39 => Visual::Guitar,
+            24..=39 | 104..=107 => Visual::Guitar,
             40..=51 => Visual::Strings,
             72..=79 => Visual::Flute,
-            52..=55 | 80..=103 => Visual::Wave,
+            52..=71 | 80..=103 | 109..=111 => Visual::Wave,
             _ => Visual::Keyboard,
         }
     }
@@ -668,6 +668,9 @@ mod tests {
         assert_eq!(Visual::for_program(46), Visual::Keyboard);
         assert_eq!(Visual::for_program(73), Visual::Flute);
         assert_eq!(Visual::for_program(89), Visual::Wave);
+        assert_eq!(Visual::for_program(104), Visual::Guitar); // sitar
+        assert_eq!(Visual::for_program(65), Visual::Wave); // sax
+        assert_eq!(Visual::for_program(108), Visual::Keyboard); // kalimba
         for v in Visual::ALL {
             assert_eq!(Visual::from_code(v.code()), Some(v));
         }

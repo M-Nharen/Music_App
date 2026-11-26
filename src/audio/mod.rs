@@ -5,16 +5,19 @@
 //! heard on the very next buffer (~1.3 ms at 64 frames / 48 kHz).
 
 pub mod builtin;
+pub mod looper;
 pub mod patterns;
 pub mod sequencer;
 pub mod songplay;
 
+use crate::midiout::MidiMsg;
 use crate::record::RecEvent;
 use anyhow::{Context, Result, anyhow};
 use builtin::BuiltinSynth;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, OutputCallbackInfo, SizedSample};
 use crossbeam_channel::{Receiver, Sender, unbounded};
+use looper::{LoopCommand, LoopState, LoopStatus, Looper};
 use patterns::Pattern;
 use rustysynth::{SoundFont, Synthesizer, SynthesizerSettings};
 use sequencer::{CH_DRUMS, ChordNotes, SeqEvent, Sequencer, StyleParams};
@@ -83,6 +86,15 @@ pub enum Command {
         on: bool,
         count_in: u32,
     },
+    /// The looper (Part 4b).
+    Loop(LoopCommand),
+    /// Virtual MIDI out (Part 4b): where to send (None = off), whether the
+    /// song backing goes out too, and whether to still play the sound here.
+    MidiOut {
+        tx: Option<Sender<MidiMsg>>,
+        song: bool,
+        local: bool,
+    },
 }
 
 /// Numbers the UI shows about the engine. Written by the audio thread.
@@ -106,6 +118,8 @@ pub struct Stats {
     pub device: Mutex<String>,
     /// Song mode clock (updated with try_lock, never blocks audio).
     pub song_clock: Mutex<SongClock>,
+    /// Looper state for the UI (same: try_lock only).
+    pub looper: Mutex<LoopStatus>,
 }
 
 impl Stats {
@@ -160,9 +174,61 @@ impl Rec {
     }
 }
 
+/// Where sound events go: the synth, and MIDI out when it's on.
+struct Out {
+    backend: Backend,
+    midi: Option<Sender<MidiMsg>>,
+    /// When the audio being rendered right now starts (MIDI time stamps).
+    at: Instant,
+    /// Make sound here too (off = MIDI out only).
+    local: bool,
+    /// Send the song backing as MIDI too.
+    song_midi: bool,
+}
+
+impl Out {
+    fn midi(&self, m: MidiMsg) {
+        if let Some(tx) = &self.midi {
+            let _ = tx.try_send(m);
+        }
+    }
+    fn midi_event(&self, e: SeqEvent) {
+        if self.midi.is_some() {
+            self.midi(match e {
+                SeqEvent::On { ch, note, vel } => MidiMsg::note_on(self.at, ch, note, vel),
+                SeqEvent::Off { ch, note } => MidiMsg::note_off(self.at, ch, note),
+            });
+        }
+    }
+}
+
+/// Something you (or the looper) play: the synth + MIDI out.
+fn out_event(out: &mut Out, e: SeqEvent) {
+    if out.local {
+        backend_event(&mut out.backend, e);
+    }
+    out.midi_event(e);
+}
+
+/// Song playback: MIDI out only if asked; always heard here unless it goes out.
+fn song_event(out: &mut Out, e: SeqEvent) {
+    if out.local || !out.song_midi {
+        backend_event(&mut out.backend, e);
+    }
+    if out.song_midi {
+        out.midi_event(e);
+    }
+}
+
+/// What you play is seen by the recorder and by the looper.
+fn tap(rec: &Rec, looper: &mut Looper, programs: &[u8; 16], t: u64, e: SeqEvent) {
+    rec.seq(t, e);
+    looper.record(t, e, programs);
+}
+
 /// State that lives inside the audio callback.
 struct Renderer {
-    backend: Backend,
+    out: Out,
     builtin_fallback: BuiltinSynth,
     rx: Receiver<Command>,
     click_tx: Sender<Instant>,
@@ -183,6 +249,9 @@ struct Renderer {
     tempo: f32,
     rec: Rec,
     pub rec_rx: Receiver<(u64, RecEvent)>,
+    looper: Looper,
+    /// The looper switched the clicks on for its first layer.
+    loop_click: bool,
 }
 
 const CLICK_LEN: usize = 1200;
@@ -202,7 +271,13 @@ impl Renderer {
             builtin.set_program(ch, program);
         }
         Renderer {
-            backend: Backend::Builtin(builtin),
+            out: Out {
+                backend: Backend::Builtin(builtin),
+                midi: None,
+                at: Instant::now(),
+                local: true,
+                song_midi: false,
+            },
             builtin_fallback: BuiltinSynth::new(sample_rate),
             rx,
             click_tx,
@@ -234,21 +309,50 @@ impl Renderer {
                 tx: rec_tx,
             },
             rec_rx,
+            looper: Looper::new(sample_rate),
+            loop_click: false,
         }
     }
 
+    /// Something you played right now: recorder, looper, synth, MIDI.
+    fn play(&mut self, e: SeqEvent) {
+        tap(
+            &self.rec,
+            &mut self.looper,
+            &self.programs,
+            self.sample_clock,
+            e,
+        );
+        out_event(&mut self.out, e);
+    }
+
     fn handle(&mut self, cmd: Command, now: Instant) {
+        self.out.at = now;
         match cmd {
             Command::Song(c) => {
-                let (song, backend) = (&mut self.song, &mut self.backend);
-                song.handle(c, now, &mut |e| backend_event(backend, e));
+                let (song, out) = (&mut self.song, &mut self.out);
+                song.handle(c, now, &mut |e| song_event(out, e));
+            }
+            Command::Loop(c) => self.loop_command(c),
+            Command::MidiOut { tx, song, local } => {
+                self.out.song_midi = song;
+                self.out.local = local || tx.is_none();
+                // Swapping the sender never frees the channel here: the
+                // MIDI thread owns the other end.
+                self.out.midi = tx;
+                for ch in 0..16u8 {
+                    if ch != CH_DRUMS {
+                        self.out
+                            .midi(MidiMsg::program(now, ch, self.programs[ch as usize]));
+                    }
+                }
             }
             Command::ChannelNote {
                 channel,
                 note,
                 velocity,
-            } => backend_event(
-                &mut self.backend,
+            } => out_event(
+                &mut self.out,
                 if velocity > 0 {
                     SeqEvent::On {
                         ch: channel & 15,
@@ -273,23 +377,11 @@ impl Renderer {
                 }
                 self.held[n] = true;
                 self.sustained[n] = false;
-                let vel = velocity.clamp(1, 127) as u8;
-                self.rec.seq(
-                    self.sample_clock,
-                    SeqEvent::On {
-                        ch: 0,
-                        note: n as u8,
-                        vel,
-                    },
-                );
-                backend_event(
-                    &mut self.backend,
-                    SeqEvent::On {
-                        ch: 0,
-                        note: n as u8,
-                        vel: velocity.clamp(1, 127) as u8,
-                    },
-                );
+                self.play(SeqEvent::On {
+                    ch: 0,
+                    note: n as u8,
+                    vel: velocity.clamp(1, 127) as u8,
+                });
             }
             Command::NoteOff { note } => {
                 if !(0..128).contains(&note) {
@@ -305,15 +397,17 @@ impl Renderer {
             }
             Command::Sustain(on) => {
                 self.sustain = on;
-                let (seq, backend, rec, t) = (
+                let (seq, out, rec, looper, programs, t) = (
                     &mut self.seq,
-                    &mut self.backend,
+                    &mut self.out,
                     &self.rec,
+                    &mut self.looper,
+                    &self.programs,
                     self.sample_clock,
                 );
                 seq.set_pedal(on, t, &mut |e| {
-                    rec.seq(t, e);
-                    backend_event(backend, e)
+                    tap(rec, looper, programs, t, e);
+                    out_event(out, e)
                 });
                 if !on {
                     for n in 0..128 {
@@ -328,6 +422,7 @@ impl Renderer {
                 self.rec
                     .tap(self.sample_clock, RecEvent::Program { ch: 0, program: p });
                 self.programs[0] = p;
+                self.out.midi(MidiMsg::program(now, 0, p));
                 self.apply_program();
             }
             Command::ChannelProgram { channel, program } => {
@@ -342,24 +437,31 @@ impl Renderer {
                         );
                     }
                     *slot = program;
+                    self.out.midi(MidiMsg::program(now, channel, program));
                     self.apply_program();
                 }
             }
             Command::Volume(v) => self.volume = v.clamp(0.0, 2.0),
             Command::AllOff => {
                 self.rec.tap(self.sample_clock, RecEvent::AllOff);
+                // The loop keeps going (losing window focus sends this too);
+                // a layer being recorded closes its held notes.
+                self.looper.all_off(self.sample_clock);
                 self.held = [false; 128];
                 self.sustained = [false; 128];
                 self.seq.reset();
                 self.song.handle(SongCommand::Play(false), now, &mut |_| {});
-                match &mut self.backend {
+                for ch in 0..16 {
+                    self.out.midi(MidiMsg::control(now, ch, 123, 0));
+                }
+                match &mut self.out.backend {
                     Backend::Builtin(s) => s.all_off(),
                     Backend::SoundFont(s) => s.note_off_all(true),
                 }
             }
             Command::UseSoundFont(synth) => {
                 self.seq.reset();
-                self.backend = Backend::SoundFont(synth);
+                self.out.backend = Backend::SoundFont(synth);
                 self.stats.soundfont_active.store(true, Ordering::Relaxed);
                 self.apply_program();
             }
@@ -367,7 +469,7 @@ impl Renderer {
                 self.seq.reset();
                 let mut b = BuiltinSynth::new(self.sample_rate);
                 std::mem::swap(&mut b, &mut self.builtin_fallback);
-                self.backend = Backend::Builtin(b);
+                self.out.backend = Backend::Builtin(b);
                 self.stats.soundfont_active.store(false, Ordering::Relaxed);
                 self.apply_program();
             }
@@ -384,8 +486,17 @@ impl Renderer {
                 self.metro.on = on;
                 self.metro.user = on;
                 self.metro.off_at = None;
+                self.loop_click = false;
                 if on {
-                    self.restart_clicks();
+                    match self.looper.next_beat(self.sample_clock) {
+                        // Click on the loop's beats.
+                        Some((at, beat)) => {
+                            self.metro.interval = self.beat_samples();
+                            self.metro.next_at = at;
+                            self.metro.beat = beat;
+                        }
+                        None => self.restart_clicks(),
+                    }
                 }
             }
             Command::Record { on, count_in } => {
@@ -397,7 +508,10 @@ impl Renderer {
                     return;
                 }
                 self.rec.start = self.sample_clock;
-                if count_in > 0 {
+                if let Some(top) = self.looper.next_pass_start() {
+                    // A loop is playing: the take starts at its top.
+                    self.rec.start = top;
+                } else if count_in > 0 {
                     if !self.metro.on {
                         self.metro.on = true;
                         self.metro.user = true;
@@ -410,43 +524,45 @@ impl Renderer {
                         self.metro.off_at = Some(self.rec.start);
                     }
                 }
-                for ch in 0..3u8 {
-                    let program = self.programs[ch as usize];
-                    self.rec
-                        .tap(self.rec.start, RecEvent::Program { ch, program });
+                let lent = self.looper.channels_in_use();
+                for ch in 0..16u8 {
+                    if ch < 3 || (lent & (1 << ch) != 0 && ch != CH_DRUMS) {
+                        let program = self.programs[ch as usize];
+                        self.rec
+                            .tap(self.rec.start, RecEvent::Program { ch, program });
+                    }
                 }
             }
-            Command::Drum { note, velocity } => {
-                self.rec.seq(
-                    self.sample_clock,
-                    SeqEvent::On {
-                        ch: CH_DRUMS,
-                        note,
-                        vel: velocity,
-                    },
-                );
-                backend_event(
-                    &mut self.backend,
-                    SeqEvent::On {
-                        ch: CH_DRUMS,
-                        note,
-                        vel: velocity,
-                    },
-                );
-            }
+            Command::Drum { note, velocity } => self.play(SeqEvent::On {
+                ch: CH_DRUMS,
+                note,
+                vel: velocity,
+            }),
             cmd => {
                 let now = self.sample_clock;
                 if let Command::Tempo(bpm) = &cmd {
                     let bpm = *bpm;
                     self.tempo = bpm;
+                    self.looper.set_tempo(bpm, now);
                     if self.metro.user {
                         self.metro.interval = self.beat_samples();
+                        // Keep clicking on the loop's beats.
+                        if let Some((at, beat)) = self.looper.next_beat(now) {
+                            self.metro.next_at = at;
+                            self.metro.beat = beat;
+                        }
                     }
                 }
-                let (seq, backend, rec) = (&mut self.seq, &mut self.backend, &self.rec);
+                let (seq, o, rec, looper, programs) = (
+                    &mut self.seq,
+                    &mut self.out,
+                    &self.rec,
+                    &mut self.looper,
+                    &self.programs,
+                );
                 let mut out = |e| {
-                    rec.seq(now, e);
-                    backend_event(backend, e)
+                    tap(rec, looper, programs, now, e);
+                    out_event(o, e)
                 };
                 match cmd {
                     Command::Chord {
@@ -464,6 +580,67 @@ impl Renderer {
         }
     }
 
+    fn loop_command(&mut self, c: LoopCommand) {
+        let now = self.sample_clock;
+        let mut start = now;
+        if let LoopCommand::Rec { count_in, .. } = c
+            && self.looper.state() == LoopState::Empty
+        {
+            // The loop starts on a click, after the count-in. If the
+            // metronome is off it clicks until the first layer is done.
+            if !(self.metro.on && self.metro.user) {
+                self.metro.on = true;
+                self.metro.user = true;
+                self.metro.off_at = None;
+                self.loop_click = true;
+                self.restart_clicks();
+            }
+            self.metro.beat = 0;
+            start = self.metro.next_at + count_in as u64 * self.metro.interval;
+        }
+        let (looper, out, rec) = (&mut self.looper, &mut self.out, &self.rec);
+        if let Some(g) = looper.command(c, now, start, &mut |e| {
+            rec.seq(now, e);
+            out_event(out, e)
+        }) {
+            self.align_clicks(g);
+        }
+        self.end_loop_click();
+    }
+
+    /// The loop (re)started at sample `g`: put the clicks on its beats.
+    fn align_clicks(&mut self, g: u64) {
+        if self.metro.on && self.metro.user {
+            self.metro.interval = self.beat_samples();
+            self.metro.next_at = g;
+            self.metro.beat = 0;
+        }
+    }
+
+    /// Clicks the looper started stop once the loop plays (or is dropped).
+    fn end_loop_click(&mut self) {
+        if self.loop_click && !matches!(self.looper.state(), LoopState::CountIn | LoopState::First)
+        {
+            self.loop_click = false;
+            self.metro.on = false;
+            self.metro.user = false;
+        }
+    }
+
+    /// Lent channels get the instrument their layer was recorded with.
+    fn loop_programs(&mut self) {
+        while let Some((ch, program)) = self.looper.take_program() {
+            self.programs[ch as usize] = program;
+            match &mut self.out.backend {
+                Backend::Builtin(s) => s.set_program(ch, program),
+                Backend::SoundFont(s) => s.process_midi_message(ch as i32, 0xC0, program as i32, 0),
+            }
+            self.out.midi(MidiMsg::program(self.out.at, ch, program));
+            self.rec
+                .tap(self.sample_clock, RecEvent::Program { ch, program });
+        }
+    }
+
     fn beat_samples(&self) -> u64 {
         (self.sample_rate as f64 * 60.0 / self.tempo.clamp(20.0, 400.0) as f64) as u64
     }
@@ -476,20 +653,10 @@ impl Renderer {
     }
 
     fn backend_off(&mut self, note: i32) {
-        self.rec.seq(
-            self.sample_clock,
-            SeqEvent::Off {
-                ch: 0,
-                note: note.clamp(0, 127) as u8,
-            },
-        );
-        backend_event(
-            &mut self.backend,
-            SeqEvent::Off {
-                ch: 0,
-                note: note.clamp(0, 127) as u8,
-            },
-        );
+        self.play(SeqEvent::Off {
+            ch: 0,
+            note: note.clamp(0, 127) as u8,
+        });
     }
 
     fn apply_program(&mut self) {
@@ -497,7 +664,7 @@ impl Renderer {
             if ch == CH_DRUMS as usize {
                 continue;
             }
-            match &mut self.backend {
+            match &mut self.out.backend {
                 Backend::Builtin(s) => s.set_program(ch as u8, prog),
                 // 0xC0 = program change.
                 Backend::SoundFont(s) => s.process_midi_message(ch as i32, 0xC0, prog as i32, 0),
@@ -520,19 +687,40 @@ impl Renderer {
         }
         // Render in pieces, split wherever the sequencer has something to
         // play, so accompaniment timing is exact to the sample.
+        if let Ok(mut s) = self.stats.looper.try_lock() {
+            *s = self.looper.status(self.sample_clock);
+        }
         let mut pos = 0;
         while pos < frames {
             let now = self.sample_clock + pos as u64;
+            self.out.at = at(pos);
             {
-                let (seq, backend, rec) = (&mut self.seq, &mut self.backend, &self.rec);
+                let (seq, out, rec, looper, programs) = (
+                    &mut self.seq,
+                    &mut self.out,
+                    &self.rec,
+                    &mut self.looper,
+                    &self.programs,
+                );
                 seq.process(now, &mut |e| {
-                    rec.seq(now, e);
-                    backend_event(backend, e)
+                    tap(rec, looper, programs, now, e);
+                    out_event(out, e)
                 });
-                let (song, backend) = (&mut self.song, &mut self.backend);
-                song.process(at(pos), &mut |e| backend_event(backend, e));
+                let grid = looper.process(now, &mut |e| {
+                    rec.seq(now, e);
+                    out_event(out, e)
+                });
+                let (song, out) = (&mut self.song, &mut self.out);
+                song.process(at(pos), &mut |e| song_event(out, e));
+                if let Some(g) = grid {
+                    self.align_clicks(g);
+                }
             }
-            let mut end = match self.seq.next_time() {
+            let next = match (self.seq.next_time(), self.looper.next_time()) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+            let mut end = match next {
                 Some(t) => ((t.max(now + 1) - self.sample_clock) as usize).min(frames),
                 None => frames,
             };
@@ -540,7 +728,7 @@ impl Renderer {
                 end = end.min(pos + (n as usize).max(1));
             }
             let (l, r) = (&mut self.left[pos..end], &mut self.right[pos..end]);
-            match &mut self.backend {
+            match &mut self.out.backend {
                 Backend::Builtin(s) => s.render(l, r),
                 Backend::SoundFont(s) => s.render(l, r),
             }
@@ -548,10 +736,12 @@ impl Renderer {
             self.song.after_render();
             pos = end;
         }
+        self.end_loop_click();
+        self.loop_programs();
         if let Ok(mut c) = self.stats.song_clock.try_lock() {
             *c = self.song.clock(at(frames));
         }
-        if let Backend::Builtin(s) = &self.backend {
+        if let Backend::Builtin(s) = &self.out.backend {
             self.stats
                 .active_voices
                 .store(s.active_voices() as u32, Ordering::Relaxed);
@@ -962,6 +1152,77 @@ mod tests {
                 note: 36,
                 vel: 100
             }));
+    }
+
+    #[test]
+    fn looper_plays_in_time_with_the_clicks_and_goes_out_as_midi() {
+        let (mut r, tx, clicks) = renderer();
+        let (mtx, mrx) = crossbeam_channel::bounded(1024);
+        tx.send(Command::MidiOut {
+            tx: Some(mtx),
+            song: false,
+            local: true,
+        })
+        .unwrap();
+        tx.send(Command::Tempo(120.0)).unwrap();
+        // One bar, two beats of count-in; the metronome is off, so the
+        // looper clicks the count-in and the first layer itself.
+        tx.send(Command::Loop(LoopCommand::Rec {
+            count_in: 2,
+            bars: 1,
+        }))
+        .unwrap();
+        let block = |r: &mut Renderer| r.render_block(128, Instant::now());
+        block(&mut r);
+        // 50 ms lead + 2 beats = 1.05 s = 50 400 samples; play on beat 2
+        // of the loop (+0.5 s).
+        while r.sample_clock < 50_400 + 24_000 {
+            block(&mut r);
+        }
+        tx.send(Command::NoteOn {
+            note: 64,
+            velocity: 100,
+        })
+        .unwrap();
+        block(&mut r);
+        tx.send(Command::NoteOff { note: 64 }).unwrap();
+        // Through the first layer (ends at 50 400 + 96 000) and one pass.
+        while r.sample_clock < 50_400 + 2 * 96_000 + 1_000 {
+            block(&mut r);
+        }
+        let st = *r.stats.looper.lock().unwrap();
+        assert_eq!(st.state, LoopState::Playing);
+        assert_eq!(st.len_beats, 4.0);
+        assert!(!r.metro.on, "the looper's clicks stop once the loop plays");
+        // 2 count-in + 4 first-layer clicks.
+        assert_eq!(clicks.try_iter().count(), 6);
+        let msgs: Vec<[u8; 3]> = mrx.try_iter().map(|m| m.data).collect();
+        // Played live on channel 0, then replayed by the loop on 15 with
+        // the same instrument set up first.
+        assert!(msgs.contains(&[0x90, 64, 100]), "{msgs:?}");
+        assert!(msgs.contains(&[0xCF, 0, 0]), "{msgs:?}");
+        assert!(msgs.contains(&[0x9F, 64, 100]), "{msgs:?}");
+        assert_eq!(r.programs[15], 0);
+
+        // MIDI only: the synth stays silent.
+        tx.send(Command::AllOff).unwrap();
+        tx.send(Command::Loop(LoopCommand::Clear)).unwrap();
+        tx.send(Command::MidiOut {
+            tx: Some(crossbeam_channel::bounded(1024).0),
+            song: false,
+            local: false,
+        })
+        .unwrap();
+        for _ in 0..40 {
+            block(&mut r);
+        }
+        tx.send(Command::NoteOn {
+            note: 60,
+            velocity: 100,
+        })
+        .unwrap();
+        block(&mut r);
+        assert_eq!(peak(&r, 128), 0.0);
     }
 
     #[test]
