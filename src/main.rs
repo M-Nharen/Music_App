@@ -12,6 +12,7 @@ mod midiout;
 mod music;
 mod record;
 mod song;
+mod spotify;
 #[cfg(test)]
 mod testalloc;
 mod theme;

@@ -115,6 +115,58 @@ pub struct Config {
 
     // ---- Lyrics (Part 10b).
     pub lyrics: LyricsSettings,
+
+    // ---- Spotify (Part 8).
+    pub spotify: SpotifySettings,
+}
+
+/// Spotify (Part 8): a personal developer app, logged in with PKCE. The
+/// tokens are *not* stored here (see `spotify::store`).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct SpotifySettings {
+    /// The Client ID of your app at developer.spotify.com (not a secret:
+    /// PKCE needs no client secret).
+    pub client_id: String,
+    /// Port of the redirect URI `http://127.0.0.1:<port>/callback`; it must
+    /// match the one registered for the app exactly.
+    pub redirect_port: u16,
+    /// Where the login is kept: "auto" (the desktop keyring through
+    /// `secret-tool` if it works, else a private file), "keyring" or "file".
+    pub token_store: String,
+    /// Seconds between now-playing polls while the Spotify tab or sync
+    /// mode is on screen (10–60). Between polls the position is estimated.
+    pub poll_secs: u32,
+    /// Sync mode / lyrics nudge in ms (+ = notes and lyrics earlier), for
+    /// Spotify's own buffering. Per-song offsets are in `links`.
+    pub offset_ms: f32,
+    /// Spotify track id → the analysed song you practise it with.
+    pub links: BTreeMap<String, SpotifyLink>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct SpotifyLink {
+    /// Song folder (or MIDI file).
+    pub song: PathBuf,
+    /// How far the analysed file is ahead of Spotify's version, in ms
+    /// (+ = notes earlier). Different masters often start a little apart.
+    pub offset_ms: f32,
+    /// Shown in the list of links.
+    pub title: String,
+}
+
+impl Default for SpotifySettings {
+    fn default() -> Self {
+        Self {
+            client_id: String::new(),
+            redirect_port: 8898,
+            token_store: "auto".into(),
+            poll_secs: 12,
+            offset_ms: 0.0,
+            links: BTreeMap::new(),
+        }
+    }
 }
 
 /// Lyrics on the Lyrics screen and in the falling notes.
@@ -142,12 +194,38 @@ pub struct LyricsSettings {
     pub follow_heard: bool,
     /// Text size on the Lyrics screen (1 = normal).
     pub size: f32,
+    /// Which set of defaults this table was written with. Missing (0) =
+    /// before Part 8, when native script was on by default: those configs
+    /// are moved once to the new default (romanised only).
+    #[serde(default)]
+    pub defaults_version: u32,
+}
+
+/// Current `LyricsSettings::defaults_version`.
+pub const LYRICS_DEFAULTS: u32 = 1;
+
+impl LyricsSettings {
+    /// Move a config written with older defaults to the current ones.
+    /// Returns true if something changed.
+    pub fn migrate(&mut self) -> bool {
+        if self.defaults_version >= LYRICS_DEFAULTS {
+            return false;
+        }
+        // Part 8: romanised only by default (native script and English off).
+        self.native = false;
+        self.romanized = true;
+        self.english = false;
+        self.defaults_version = LYRICS_DEFAULTS;
+        true
+    }
 }
 
 impl Default for LyricsSettings {
     fn default() -> Self {
         Self {
-            native: true,
+            // Romanised only (Tanglish / Tenglish / Hinglish …); the native
+            // script and the English translation can be switched on.
+            native: false,
             romanized: true,
             english: false,
             overlay: true,
@@ -156,6 +234,7 @@ impl Default for LyricsSettings {
             offset_ms: 0.0,
             follow_heard: true,
             size: 1.0,
+            defaults_version: LYRICS_DEFAULTS,
         }
     }
 }
@@ -311,6 +390,7 @@ impl Default for Config {
             midi_out_local: true,
             jam: JamSettings::default(),
             lyrics: LyricsSettings::default(),
+            spotify: SpotifySettings::default(),
         }
     }
 }
@@ -341,8 +421,13 @@ impl Config {
     pub fn load() -> (Config, Option<String>) {
         let path = config_path();
         match std::fs::read_to_string(&path) {
-            Ok(text) => match toml::from_str(&text) {
-                Ok(c) => (c, None),
+            Ok(text) => match toml::from_str::<Config>(&text) {
+                Ok(mut c) => {
+                    if c.lyrics.migrate() {
+                        let _ = c.save();
+                    }
+                    (c, None)
+                }
                 Err(e) => (
                     Config::default(),
                     Some(format!("config.toml has an error, using defaults: {e}")),
@@ -608,6 +693,32 @@ mod tests {
         // Missing fields fall back to defaults.
         let partial: Config = toml::from_str("volume = 0.5").unwrap();
         assert_eq!(partial.buffer_frames, 128);
+    }
+
+    #[test]
+    fn lyrics_default_is_romanised_only() {
+        let l = LyricsSettings::default();
+        assert!(l.romanized && !l.native && !l.english);
+        // A config from before Part 8 (native on, no defaults_version) is
+        // moved once to the new default…
+        let mut old: Config =
+            toml::from_str("[lyrics]\nnative = true\nromanized = true\nenglish = false\n").unwrap();
+        assert_eq!(old.lyrics.defaults_version, 0);
+        assert!(old.lyrics.migrate());
+        assert!(old.lyrics.romanized && !old.lyrics.native && !old.lyrics.english);
+        // …and choices made after that are kept.
+        let text = toml::to_string_pretty(&{
+            let mut c = old.clone();
+            c.lyrics.native = true;
+            c
+        })
+        .unwrap();
+        let mut again: Config = toml::from_str(&text).unwrap();
+        assert!(!again.lyrics.migrate());
+        assert!(again.lyrics.native);
+        // No [lyrics] table at all: plain defaults, nothing to migrate.
+        let mut fresh: Config = toml::from_str("volume = 0.5").unwrap();
+        assert!(!fresh.lyrics.migrate());
     }
 
     #[test]

@@ -11,7 +11,9 @@
 //! sound). Taps are always stamped with what you hear.
 
 use super::*;
-use crate::song::lyrics::{Layer, Layers, Lyrics, LyricsEditor, SourceOf};
+use crate::song::lyrics::{
+    Layer, Layers, Lyrics, LyricsEditor, SourceOf, parse_lrc as parse_pasted, parse_lrc_time,
+};
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Align2, FontId, Pos2, Rect, Sense, pos2};
 
@@ -1943,91 +1945,6 @@ fn fade(painter: &egui::Painter, rect: Rect, bg: Color32) {
         painter.rect_filled(top, 0.0, c);
         painter.rect_filled(bot, 0.0, c);
     }
-}
-
-/// Pasted text: an .lrc (with times) or plain lines.
-fn parse_pasted(text: &str, lang: &str) -> Lyrics {
-    let mut doc = Lyrics::from_text("", Some(lang));
-    let mut timed = false;
-    for raw in text.lines() {
-        let mut rest = raw.trim();
-        let mut times = Vec::new();
-        while let Some(r) = rest.strip_prefix('[') {
-            let Some(end) = r.find(']') else { break };
-            let tag = &r[..end];
-            if let Some(t) = parse_lrc_time(tag) {
-                times.push(t);
-                rest = r[end + 1..].trim_start();
-            } else {
-                // [ti:…] and other tags.
-                rest = "";
-                break;
-            }
-        }
-        // Drop enhanced-LRC word stamps.
-        let mut clean = String::new();
-        let mut s = rest;
-        while let Some(a) = s.find('<') {
-            match s[a..].find('>') {
-                Some(b) if parse_lrc_time(&s[a + 1..a + b]).is_some() => {
-                    clean.push_str(&s[..a]);
-                    s = &s[a + b + 1..];
-                }
-                _ => {
-                    clean.push_str(&s[..=a]);
-                    s = &s[a + 1..];
-                }
-            }
-        }
-        clean.push_str(s);
-        let text = clean.split_whitespace().collect::<Vec<_>>().join(" ");
-        if text.is_empty() {
-            continue;
-        }
-        if times.is_empty() {
-            times.push(f64::NAN);
-        }
-        for t in times {
-            let mut l = crate::song::lyrics::Line::new(&text);
-            l.language = Some(lang.to_string());
-            if lang.ends_with("-Latn") {
-                l.romanized = Some(text.clone());
-            }
-            if t.is_finite() {
-                l.start = Some(t);
-                timed = true;
-            }
-            doc.lines.push(l);
-        }
-    }
-    if timed {
-        doc.lines.sort_by(|a, b| {
-            a.start
-                .unwrap_or(f64::MAX)
-                .total_cmp(&b.start.unwrap_or(f64::MAX))
-        });
-        let starts: Vec<Option<f64>> = doc.lines.iter().map(|l| l.start).collect();
-        for (k, l) in doc.lines.iter_mut().enumerate() {
-            if l.start.is_some() {
-                l.end = starts[k + 1..].iter().flatten().next().copied();
-            }
-        }
-    }
-    doc.status = if doc.lines.is_empty() {
-        "not_found".into()
-    } else if timed {
-        "synced".into()
-    } else {
-        "plain".into()
-    };
-    doc
-}
-
-fn parse_lrc_time(s: &str) -> Option<f64> {
-    let (m, sec) = s.split_once(':')?;
-    let m: f64 = m.trim().parse().ok()?;
-    let sec: f64 = sec.trim().replace(':', ".").parse().ok()?;
-    (m >= 0.0 && (0.0..60.0).contains(&sec)).then_some(m * 60.0 + sec)
 }
 
 #[cfg(test)]
