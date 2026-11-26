@@ -202,7 +202,10 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             let m = std::fs::metadata(&path).unwrap().permissions().mode();
             assert_eq!(m & 0o777, 0o600);
-            let d = std::fs::metadata(path.parent().unwrap()).unwrap().permissions().mode();
+            let d = std::fs::metadata(path.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode();
             assert_eq!(d & 0o777, 0o700);
         }
         // Overwrite works (atomic rename over the old file).

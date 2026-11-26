@@ -902,7 +902,9 @@ impl QwertoneApp {
 
     pub(super) fn song_set_speed(&mut self, s: f64) {
         if self.syncing() {
-            self.notify("Following Spotify: the speed is Spotify's (100 %). Stop following to slow down.");
+            self.notify(
+                "Following Spotify: the speed is Spotify's (100 %). Stop following to slow down.",
+            );
             return;
         }
         let s = (s * 20.0).round() / 20.0;

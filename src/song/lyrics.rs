@@ -756,7 +756,6 @@ pub fn parse_lrc_time(s: &str) -> Option<f64> {
     (m >= 0.0 && (0.0..60.0).contains(&sec)).then_some(m * 60.0 + sec)
 }
 
-
 /// Which source of a line.
 impl Sources {
     pub fn get(&self, what: SourceOf) -> Option<&Source> {

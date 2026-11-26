@@ -189,22 +189,43 @@ mod tests {
     #[test]
     fn scoring() {
         let sp = v(&["Anirudh Ravichander", "Jonita Gandhi"]);
-        let s = score("Arabic Kuthu - Halamithi Habibo", &sp, 279.0, "Arabic Kuthu", Some("Anirudh Ravichander"), 280.5);
+        let s = score(
+            "Arabic Kuthu - Halamithi Habibo",
+            &sp,
+            279.0,
+            "Arabic Kuthu",
+            Some("Anirudh Ravichander"),
+            280.5,
+        );
         assert!(s >= SURE, "{s}");
         // No artist tag, same length: still a match.
         let s = score("Arabic Kuthu", &sp, 279.0, "arabic kuthu", None, 279.0);
         assert!(s >= SURE, "{s}");
         // Same title, other song (very different length, other artist).
-        let s = score("Arabic Kuthu", &sp, 279.0, "Arabic Kuthu", Some("Cover Band"), 150.0);
+        let s = score(
+            "Arabic Kuthu",
+            &sp,
+            279.0,
+            "Arabic Kuthu",
+            Some("Cover Band"),
+            150.0,
+        );
         assert!(s < MAYBE, "{s}");
         // Different title.
-        assert_eq!(score("Vaathi Coming", &sp, 200.0, "Arabic Kuthu", None, 200.0), 0.0);
+        assert_eq!(
+            score("Vaathi Coming", &sp, 200.0, "Arabic Kuthu", None, 200.0),
+            0.0
+        );
     }
 
     #[test]
     fn file_names() {
         let sp = v(&["Anirudh Ravichander"]);
-        let a = file_score("Arabic Kuthu", &sp, Path::new("/m/Anirudh Ravichander - Arabic Kuthu.mp3"));
+        let a = file_score(
+            "Arabic Kuthu",
+            &sp,
+            Path::new("/m/Anirudh Ravichander - Arabic Kuthu.mp3"),
+        );
         let b = file_score("Arabic Kuthu", &sp, Path::new("/m/arabic_kuthu.flac"));
         let c = file_score("Arabic Kuthu", &sp, Path::new("/m/Vaathi Coming.mp3"));
         assert!(a > b && b > MAYBE && c == 0.0, "{a} {b} {c}");

@@ -1967,8 +1967,8 @@ mod tests {
         assert_eq!(d.lines.len(), 2);
         assert_eq!(d.status, "plain");
         assert_eq!(d.lines[1].romanized.as_deref(), Some("naan unakku"));
-        assert_eq!(parse_lrc_time("01:02.5"), Some(62.5));
-        assert_eq!(parse_lrc_time("ar:someone"), None);
+        assert_eq!(crate::song::lyrics::parse_lrc_time("01:02.5"), Some(62.5));
+        assert_eq!(crate::song::lyrics::parse_lrc_time("ar:someone"), None);
     }
 
     #[test]

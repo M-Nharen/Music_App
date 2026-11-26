@@ -123,7 +123,12 @@ impl Limiter {
     }
 
     /// A 429. Returns the time until which everything pauses.
-    pub fn too_many(&mut self, now: Instant, retry_after: Option<Duration>, quota: bool) -> Instant {
+    pub fn too_many(
+        &mut self,
+        now: Instant,
+        retry_after: Option<Duration>,
+        quota: bool,
+    ) -> Instant {
         self.strikes += 1;
         let base = if quota { DEFAULT_QUOTA } else { DEFAULT_429 };
         // Our own back-off: base × 2^(strikes−1), capped.
@@ -236,7 +241,10 @@ mod tests {
         for _ in 0..RESERVED {
             assert!(l.begin(t, Urgency::User).is_ok());
         }
-        assert!(matches!(l.begin(t, Urgency::User), Err(Blocked::Budget { .. })));
+        assert!(matches!(
+            l.begin(t, Urgency::User),
+            Err(Blocked::Budget { .. })
+        ));
         // Once the window has moved on, calls go again.
         assert!(l.begin(t0 + WINDOW + s(11), Urgency::Poll).is_ok());
     }
@@ -315,13 +323,21 @@ mod tests {
     #[test]
     fn parsing() {
         assert_eq!(parse_retry_after(Some("30")), Some(s(30)));
-        assert_eq!(parse_retry_after(Some(" 2.5 ")), Some(Duration::from_millis(2500)));
-        assert_eq!(parse_retry_after(Some("Wed, 21 Oct 2015 07:28:00 GMT")), None);
+        assert_eq!(
+            parse_retry_after(Some(" 2.5 ")),
+            Some(Duration::from_millis(2500))
+        );
+        assert_eq!(
+            parse_retry_after(Some("Wed, 21 Oct 2015 07:28:00 GMT")),
+            None
+        );
         assert_eq!(parse_retry_after(None), None);
         assert!(is_quota(
             r#"{"error":{"status":429,"message":"Too many requests","reason":"QUOTA_EXCEEDED"}}"#
         ));
-        assert!(!is_quota(r#"{"error":{"status":429,"message":"Too many requests"}}"#));
+        assert!(!is_quota(
+            r#"{"error":{"status":429,"message":"Too many requests"}}"#
+        ));
         assert!(!is_quota(""));
         assert_eq!(fmt_wait(s(40)), "40 s");
         assert_eq!(fmt_wait(s(61)), "2 min");

@@ -148,7 +148,10 @@ pub fn lrclib_lookup(agent: &ureq::Agent, track: &Track) -> Result<Option<Value>
     let get = |url: &str| -> Result<(u16, String), String> {
         let resp = agent
             .get(url)
-            .header("User-Agent", "Qwertone (https://github.com/M-Nharen/Music_App)")
+            .header(
+                "User-Agent",
+                "Qwertone (https://github.com/M-Nharen/Music_App)",
+            )
             .call()
             .map_err(|e| format!("LRCLIB: {e}"))?;
         let status = resp.status().as_u16();
@@ -231,7 +234,12 @@ pub fn lyrics_from_record(rec: Option<&Value>, track: &Track) -> Lyrics {
         .and_then(|x| x.as_bool())
         .unwrap_or(false);
     if doc.lines.is_empty() {
-        doc.status = if instrumental { "instrumental" } else { "not_found" }.into();
+        doc.status = if instrumental {
+            "instrumental"
+        } else {
+            "not_found"
+        }
+        .into();
     }
     if let Some(r) = rec {
         let mut extra = serde_json::Map::new();
@@ -337,7 +345,10 @@ mod tests {
         let miss = lyrics_from_record(None, &track());
         assert_eq!(miss.status, "not_found");
         let inst: Value = serde_json::from_str(r#"{"id": 5, "instrumental": true}"#).unwrap();
-        assert_eq!(lyrics_from_record(Some(&inst), &track()).status, "instrumental");
+        assert_eq!(
+            lyrics_from_record(Some(&inst), &track()).status,
+            "instrumental"
+        );
     }
 
     #[test]

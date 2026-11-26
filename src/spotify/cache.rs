@@ -82,8 +82,11 @@ impl Cache {
         }
         self.searches.insert(key(q), Search { at: now, tracks });
         if self.searches.len() > MAX_SEARCHES {
-            let mut by_age: Vec<(i64, String)> =
-                self.searches.iter().map(|(k, s)| (s.at, k.clone())).collect();
+            let mut by_age: Vec<(i64, String)> = self
+                .searches
+                .iter()
+                .map(|(k, s)| (s.at, k.clone()))
+                .collect();
             by_age.sort();
             for (_, k) in by_age.into_iter().take(self.searches.len() - MAX_SEARCHES) {
                 self.searches.remove(&k);
@@ -103,8 +106,11 @@ impl Cache {
         }
         self.tracks.insert(id, (now, t));
         if self.tracks.len() > MAX_TRACKS {
-            let mut by_age: Vec<(i64, String)> =
-                self.tracks.iter().map(|(k, (at, _))| (*at, k.clone())).collect();
+            let mut by_age: Vec<(i64, String)> = self
+                .tracks
+                .iter()
+                .map(|(k, (at, _))| (*at, k.clone()))
+                .collect();
             by_age.sort();
             for (_, k) in by_age.into_iter().take(self.tracks.len() - MAX_TRACKS) {
                 self.tracks.remove(&k);
@@ -159,8 +165,14 @@ mod tests {
         let mut c = Cache::default();
         c.put_search("Arabic  Kuthu!", vec![tr("a", "Arabic Kuthu")], 1000);
         assert!(c.search("arabic kuthu", 1000 + 60, false).is_some());
-        assert!(c.search("arabic kuthu", 1000 + SEARCH_TTL_SECS + 1, false).is_none());
-        assert!(c.search("arabic kuthu", 1000 + SEARCH_TTL_SECS + 1, true).is_some());
+        assert!(
+            c.search("arabic kuthu", 1000 + SEARCH_TTL_SECS + 1, false)
+                .is_none()
+        );
+        assert!(
+            c.search("arabic kuthu", 1000 + SEARCH_TTL_SECS + 1, true)
+                .is_some()
+        );
         assert_eq!(c.track("a").unwrap().name, "Arabic Kuthu");
         assert!(c.dirty);
         // Offline search over what we've seen.

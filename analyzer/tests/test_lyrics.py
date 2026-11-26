@@ -450,3 +450,59 @@ def test_embedded_sylt_synced_frame(tmp_path):
     validate(doc)
     assert doc["status"] == "synced" and doc["sources"]["words"]["tag"].startswith("SYLT")
     assert [(l["start"], l["tanglish"]) for l in doc["lines"]] == [(0.5, "ondru"), (1.2, "irandu")]
+
+
+# ============================================================================ Spotify (Part 8)
+
+def spotify_stub(tmp_path, track_id="4uLU6hMCjMI75M1A2tKUQC", duration=30.0) -> Path:
+    """The stand-in song folder the app makes for a Spotify track (src/spotify/lyrics.rs,
+    `stub_song`): metadata and length only, no audio, no beats, no parts."""
+    d = tmp_path / "spotify" / "lyrics" / track_id
+    d.mkdir(parents=True)
+    song = {"format": "qwertone-song", "format_version": 1,
+            "source": {"kind": "spotify", "file": "Qwertone Test Band - Kaalai Thendral",
+                       "sha256": f"spotify-{track_id}", "spotify_uri": f"spotify:track:{track_id}"},
+            "metadata": {"title": "Kaalai Thendral", "artist": "Qwertone Test Band",
+                         "artists": ["Qwertone Test Band", "Someone Else"], "album": "Test Songs"},
+            "duration": duration, "beats": [], "parts": [], "chords": []}
+    (d / "song.json").write_text(json.dumps(song))
+    return d
+
+
+def test_spotify_stand_in_folder(tmp_path, monkeypatch):
+    """Lyrics for whatever Spotify plays: LRCLIB by Spotify's title / artist / album / length,
+    romanised like any song, no audio needed, and asked only once."""
+    fake = FakeLrclib([record(synced="[00:01.00]ஒன்று\n[00:02.00]இரண்டு\n", duration=30.0)])
+    monkeypatch.setattr(lrclib, "http_get", fake)
+    d = spotify_stub(tmp_path)
+    res = lyrics.run_lyrics(d, opts(tmp_path))
+    doc = read(d)
+    validate(doc)
+    assert res.status == "synced" and len(fake.calls) == 1
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(fake.calls[0]).query)
+    assert q["track_name"] == ["Kaalai Thendral"] and q["artist_name"] == ["Qwertone Test Band"]
+    assert q["album_name"] == ["Test Songs"] and q["duration"] == ["30"]
+    assert [l["romanized"] for l in doc["lines"]] == ["ondru", "irandu"]
+    assert doc["lines"][0]["start_beat"] is None                         # no beat grid: seconds only
+    # a second run is up to date: no request
+    assert lyrics.run_lyrics(d, opts(tmp_path)).skipped and len(fake.calls) == 1
+
+
+def test_spotify_stand_in_not_found(tmp_path, monkeypatch):
+    monkeypatch.setattr(lrclib, "http_get", FakeLrclib([]))
+    d = spotify_stub(tmp_path)
+    res = lyrics.run_lyrics(d, opts(tmp_path))
+    assert res.status == "not_found"
+    assert read(d)["status"] == "not_found"
+
+
+def test_spotify_metadata_for_an_analysed_song(tmp_path, monkeypatch):
+    """`lyrics SONG --title … --artist … --album …` (the app passes Spotify's metadata when an
+    analysed song has no lyrics yet) looks those up instead of the file's tags."""
+    fake = FakeLrclib([record(synced="[00:01.00]x\n", duration=30.0)])
+    monkeypatch.setattr(lrclib, "http_get", fake)
+    d = make_song(tmp_path, name="track01.mp3")
+    lyrics.run_lyrics(d, opts(tmp_path, title="Kaalai Thendral", artist="Qwertone Test Band",
+                              album="Test Songs", force=True))
+    assert "track_name=Kaalai+Thendral" in fake.calls[0] or "track_name=Kaalai%20Thendral" in fake.calls[0]
+    assert read(d)["status"] == "synced"

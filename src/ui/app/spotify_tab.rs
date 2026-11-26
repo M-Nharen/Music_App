@@ -177,7 +177,9 @@ impl QwertoneApp {
         self.spotify.started = true;
         self.spotify.cache = Cache::load();
         let c = ctx.clone();
-        let client = Client::start(self.cfg.spotify.token_store.clone(), move || c.request_repaint());
+        let client = Client::start(self.cfg.spotify.token_store.clone(), move || {
+            c.request_repaint()
+        });
         self.spotify.client = Some(client);
         if self.cfg.spotify.client_id.is_empty() {
             return;
@@ -199,7 +201,10 @@ impl QwertoneApp {
         let on_tab = self.tab == Tab::Spotify;
         let sync = self.tab == Tab::Song
             && self.syncing()
-            && matches!(self.song_ui.view, song::SongView::Practice | song::SongView::Lyrics);
+            && matches!(
+                self.song_ui.view,
+                song::SongView::Practice | song::SongView::Lyrics
+            );
         self.spotify.logged_in && (on_tab || sync)
     }
 
@@ -638,7 +643,9 @@ impl QwertoneApp {
     fn spotify_start_sync(&mut self, t: &Track, link: &SpotifyLink) {
         let open_now = self.song_open_path();
         let same = open_now.as_ref().is_some_and(|p| {
-            p == &link.song || p.parent() == Some(link.song.as_path()) || link.song.parent() == Some(p.as_path())
+            p == &link.song
+                || p.parent() == Some(link.song.as_path())
+                || link.song.parent() == Some(p.as_path())
         });
         if !same {
             self.open_song(&link.song);
@@ -711,7 +718,10 @@ impl QwertoneApp {
 
     /// A file was picked / clicked for "Learn this".
     fn spotify_use_file(&mut self, t: &Track, p: &std::path::Path) {
-        if crate::song::library::is_midi(p) || p.join("song.json").exists() || p.ends_with("song.json") {
+        if crate::song::library::is_midi(p)
+            || p.join("song.json").exists()
+            || p.ends_with("song.json")
+        {
             let target = if p.ends_with("song.json") {
                 p.parent().unwrap_or(p).to_path_buf()
             } else {
@@ -725,7 +735,9 @@ impl QwertoneApp {
         match self.song_start_analysis(p) {
             Ok(()) => {
                 self.spotify.pending_link = Some((t.clone(), p.to_path_buf()));
-                self.notify("Analysing… it opens by itself when done (the Song tab shows the details).");
+                self.notify(
+                    "Analysing… it opens by itself when done (the Song tab shows the details).",
+                );
             }
             Err(e) => self.notify(e),
         }
@@ -939,7 +951,12 @@ impl QwertoneApp {
             return;
         }
         let target = est.position_s(now) + self.spotify_offset_s();
-        let dur = self.song_ui.song.as_ref().map(|s| s.duration).unwrap_or(0.0);
+        let dur = self
+            .song_ui
+            .song
+            .as_ref()
+            .map(|s| s.duration)
+            .unwrap_or(0.0);
         let (ours, playing) = self.song_clock_now();
         let off = ours - target;
         if est.playing && !playing {
@@ -982,11 +999,24 @@ impl QwertoneApp {
             .is_some_and(|e| e.track_id.as_deref() == Some(sync.track_id.as_str()));
         let playing = this && est.as_ref().is_some_and(|e| e.playing);
         ui.horizontal_wrapped(|ui| {
-            chip(ui, p.primary_container, p.on_primary_container, "♫ Following Spotify");
+            chip(
+                ui,
+                p.primary_container,
+                p.on_primary_container,
+                "♫ Following Spotify",
+            );
             if let Some(d) = self.spotify.pb.as_ref().and_then(|x| x.device.clone()) {
-                chip(ui, p.surface_container_high, p.on_surface, format!("on {}", d.name));
+                chip(
+                    ui,
+                    p.surface_container_high,
+                    p.on_surface,
+                    format!("on {}", d.name),
+                );
             }
-            if ui.small_button("−10 s").on_hover_text("Spotify back 10 s").clicked()
+            if ui
+                .small_button("−10 s")
+                .on_hover_text("Spotify back 10 s")
+                .clicked()
                 && let Some(e) = &est
             {
                 self.spotify_seek_ms(e.position_ms(now) - 10_000.0);
@@ -1007,7 +1037,10 @@ impl QwertoneApp {
             {
                 self.spotify_toggle();
             }
-            if ui.small_button("+10 s").on_hover_text("Spotify ahead 10 s").clicked()
+            if ui
+                .small_button("+10 s")
+                .on_hover_text("Spotify ahead 10 s")
+                .clicked()
                 && let Some(e) = &est
             {
                 self.spotify_seek_ms(e.position_ms(now) + 10_000.0);
@@ -1042,7 +1075,12 @@ impl QwertoneApp {
                 changed = true;
             }
             changed |= ui
-                .add(egui::DragValue::new(&mut o).range(-10_000.0..=10_000.0).speed(5.0).suffix(" ms"))
+                .add(
+                    egui::DragValue::new(&mut o)
+                        .range(-10_000.0..=10_000.0)
+                        .speed(5.0)
+                        .suffix(" ms"),
+                )
                 .on_hover_text(
                     "How far your analysed file is ahead of Spotify's version (+ = notes earlier). \
                      Different releases often start a little apart. Saved for this song.",
@@ -1111,7 +1149,9 @@ impl QwertoneApp {
         // Play button on Spotify when nothing is playing: play this track.
         if !this
             && let Some(t) = self.spotify.cache.track(&sync.track_id).cloned()
-            && ui.small_button(format!("▶ Play “{}” on Spotify", t.name)).clicked()
+            && ui
+                .small_button(format!("▶ Play “{}” on Spotify", t.name))
+                .clicked()
         {
             self.spotify_play_track(&t, None);
         }
@@ -1177,7 +1217,9 @@ impl QwertoneApp {
                     .clicked()
                 {
                     match self.spotify.pending_play.take() {
-                        Some(Req::Play { uri, position_ms, .. }) => self.sp_send(Req::Play {
+                        Some(Req::Play {
+                            uri, position_ms, ..
+                        }) => self.sp_send(Req::Play {
                             uri,
                             position_ms,
                             device: Some(id.clone()),
@@ -1222,9 +1264,11 @@ impl QwertoneApp {
                 });
             }
             ui.label(
-                RichText::new("Full guide with pictures-in-words: docs/SPOTIFY_SETUP.md in the app's folder.")
-                    .small()
-                    .color(p.outline),
+                RichText::new(
+                    "Full guide with pictures-in-words: docs/SPOTIFY_SETUP.md in the app's folder.",
+                )
+                .small()
+                .color(p.outline),
             );
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -1239,7 +1283,11 @@ impl QwertoneApp {
                 ui.horizontal_wrapped(|ui| {
                     ui.spinner();
                     ui.label("Waiting for you to allow it in the browser…");
-                    if ui.small_button("Copy the link").on_hover_text("If no browser opened").clicked() {
+                    if ui
+                        .small_button("Copy the link")
+                        .on_hover_text("If no browser opened")
+                        .clicked()
+                    {
                         ui.ctx().copy_text(l.url.clone());
                     }
                 });
@@ -1247,14 +1295,19 @@ impl QwertoneApp {
                     self.spotify.login = None;
                 }
             } else if ui
-                .add(egui::Button::new(RichText::new("Log in with Spotify").strong()).fill(p.primary_container))
+                .add(
+                    egui::Button::new(RichText::new("Log in with Spotify").strong())
+                        .fill(p.primary_container),
+                )
                 .clicked()
             {
                 let id = self.spotify.client_id_input.trim().to_string();
                 self.cfg.spotify.client_id = id.clone();
                 self.mark_dirty();
                 let ctx = ui.ctx().clone();
-                match Login::start(&id, self.cfg.spotify.redirect_port, move || ctx.request_repaint()) {
+                match Login::start(&id, self.cfg.spotify.redirect_port, move || {
+                    ctx.request_repaint()
+                }) {
                     Ok(l) => {
                         self.spotify.login = Some(l);
                         self.spotify.login_error = None;
@@ -1304,7 +1357,11 @@ impl QwertoneApp {
             ui.label(RichText::new(t.artist_line()).size(16.0));
             ui.label(RichText::new(&t.album).color(p.on_surface_variant));
             if let Some(d) = &pb.device {
-                ui.label(RichText::new(format!("on {} ({})", d.name, d.kind)).small().color(p.outline));
+                ui.label(
+                    RichText::new(format!("on {} ({})", d.name, d.kind))
+                        .small()
+                        .color(p.outline),
+                );
             }
             ui.add_space(6.0);
             if let Some(e) = &est {
@@ -1316,10 +1373,12 @@ impl QwertoneApp {
                 } else {
                     0.0
                 };
-                ui.painter().rect_filled(r, egui::CornerRadius::same(5), p.surface_container_high);
+                ui.painter()
+                    .rect_filled(r, egui::CornerRadius::same(5), p.surface_container_high);
                 let mut done = r;
                 done.set_width(r.width() * frac.clamp(0.0, 1.0));
-                ui.painter().rect_filled(done, egui::CornerRadius::same(5), p.primary);
+                ui.painter()
+                    .rect_filled(done, egui::CornerRadius::same(5), p.primary);
                 if resp.clicked()
                     && let Some(pos) = resp.interact_pointer_pos()
                 {
@@ -1364,10 +1423,15 @@ impl QwertoneApp {
                 }
             });
             ui.add_space(6.0);
-            let link = t.id.as_ref().and_then(|id| self.cfg.spotify.links.get(id).cloned());
+            let link =
+                t.id.as_ref()
+                    .and_then(|id| self.cfg.spotify.links.get(id).cloned());
             ui.horizontal_wrapped(|ui| {
                 if ui
-                    .add(egui::Button::new(RichText::new("🎹  Learn this").strong()).fill(p.primary_container))
+                    .add(
+                        egui::Button::new(RichText::new("🎹  Learn this").strong())
+                            .fill(p.primary_container),
+                    )
                     .on_hover_text(if link.is_some() {
                         "Open the practice version and follow Spotify"
                     } else {
@@ -1378,10 +1442,17 @@ impl QwertoneApp {
                     self.spotify_learn(&t);
                 }
                 if let Some(l) = &link {
-                    chip(ui, p.surface_container_high, p.on_surface, "practice version ready");
+                    chip(
+                        ui,
+                        p.surface_container_high,
+                        p.on_surface,
+                        "practice version ready",
+                    );
                     if ui
                         .small_button("Practise at my own speed")
-                        .on_hover_text("Open it without following Spotify (slow down, loop, wait mode)")
+                        .on_hover_text(
+                            "Open it without following Spotify (slow down, loop, wait mode)",
+                        )
                         .clicked()
                     {
                         self.spotify_stop_sync_quiet();
@@ -1415,8 +1486,16 @@ impl QwertoneApp {
             .as_ref()
             .filter(|(i, _)| *i == id)
             .and_then(|(_, d)| d.clone());
-        let looking = self.spotify.lyrics_job.as_ref().is_some_and(|(i, _)| *i == id)
-            || self.spotify.lyrics_direct.as_ref().is_some_and(|(i, _)| *i == id);
+        let looking = self
+            .spotify
+            .lyrics_job
+            .as_ref()
+            .is_some_and(|(i, _)| *i == id)
+            || self
+                .spotify
+                .lyrics_direct
+                .as_ref()
+                .is_some_and(|(i, _)| *i == id);
         let failed = self
             .spotify
             .lyrics_failed
@@ -1428,7 +1507,9 @@ impl QwertoneApp {
                 if looking {
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label("Looking for lyrics (LRCLIB, by Spotify's title / artist / length)…");
+                        ui.label(
+                            "Looking for lyrics (LRCLIB, by Spotify's title / artist / length)…",
+                        );
                     });
                 } else if let Some(e) = failed {
                     ui.label(RichText::new(format!("Couldn't get lyrics: {e}")).color(p.tertiary));
@@ -1458,10 +1539,18 @@ impl QwertoneApp {
                 let l = &mut self.cfg.lyrics;
                 let mut changed = false;
                 if have.native {
-                    changed |= ui.selectable_label(l.native, "Original script").clicked().then(|| l.native = !l.native).is_some();
+                    changed |= ui
+                        .selectable_label(l.native, "Original script")
+                        .clicked()
+                        .then(|| l.native = !l.native)
+                        .is_some();
                 }
                 if have.romanized {
-                    changed |= ui.selectable_label(l.romanized, "English letters").clicked().then(|| l.romanized = !l.romanized).is_some();
+                    changed |= ui
+                        .selectable_label(l.romanized, "English letters")
+                        .clicked()
+                        .then(|| l.romanized = !l.romanized)
+                        .is_some();
                 }
                 if have.english {
                     changed |= ui
@@ -1501,9 +1590,17 @@ impl QwertoneApp {
                     let is_cur = Some(i) == pos.line && pos.active;
                     let texts = doc.texts(line, want);
                     for (k, (layer, s)) in texts.iter().enumerate() {
-                        let mut rt = RichText::new(*s).size(if is_cur && k == 0 { size * 1.35 } else { size });
+                        let mut rt = RichText::new(*s).size(if is_cur && k == 0 {
+                            size * 1.35
+                        } else {
+                            size
+                        });
                         rt = if is_cur {
-                            rt.strong().color(if *layer == Layer::English { p.on_surface_variant } else { p.primary })
+                            rt.strong().color(if *layer == Layer::English {
+                                p.on_surface_variant
+                            } else {
+                                p.primary
+                            })
                         } else if Some(i) < pos.line {
                             rt.color(p.outline)
                         } else {
@@ -1514,14 +1611,24 @@ impl QwertoneApp {
                             && let Some(st) = line.start
                         {
                             // Jump Spotify to this line.
-                            let back = lt - self.spotify.est.as_ref().map(|e| e.position_s(now)).unwrap_or(0.0);
+                            let back = lt
+                                - self
+                                    .spotify
+                                    .est
+                                    .as_ref()
+                                    .map(|e| e.position_s(now))
+                                    .unwrap_or(0.0);
                             self.spotify_seek_ms((st - back) * 1000.0);
                         }
                     }
                     ui.add_space(4.0);
                 }
             } else {
-                ui.label(RichText::new("These lyrics have no timing (shown as a list).").small().color(p.outline));
+                ui.label(
+                    RichText::new("These lyrics have no timing (shown as a list).")
+                        .small()
+                        .color(p.outline),
+                );
                 for line in &doc.lines {
                     for (_, s) in doc.texts(line, want) {
                         ui.label(s);
@@ -1530,13 +1637,27 @@ impl QwertoneApp {
             }
             ui.add_space(4.0);
             // Source + nudge.
-            let src = doc.sources.words.as_ref().map(|s| s.name.clone()).unwrap_or_else(|| "?".into());
+            let src = doc
+                .sources
+                .words
+                .as_ref()
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "?".into());
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new(format!("Lyrics: {src}")).small().color(p.outline));
+                ui.label(
+                    RichText::new(format!("Lyrics: {src}"))
+                        .small()
+                        .color(p.outline),
+                );
                 let mut o = self.cfg.lyrics.offset_ms;
                 ui.label(RichText::new("· timing").small().color(p.outline));
                 if ui
-                    .add(egui::DragValue::new(&mut o).range(-3000.0..=3000.0).speed(5.0).suffix(" ms"))
+                    .add(
+                        egui::DragValue::new(&mut o)
+                            .range(-3000.0..=3000.0)
+                            .speed(5.0)
+                            .suffix(" ms"),
+                    )
                     .on_hover_text("+ = lyrics earlier, − = later")
                     .changed()
                 {
@@ -1551,22 +1672,28 @@ impl QwertoneApp {
     /// output delay when Spotify plays on a computer (probably this one,
     /// through the same earbuds), plus the nudges.
     fn spotify_lyrics_time(&self, t: &Track, now: Instant) -> f64 {
-        let Some(e) = &self.spotify.est else { return 0.0 };
+        let Some(e) = &self.spotify.est else {
+            return 0.0;
+        };
         let on_computer = self
             .spotify
             .pb
             .as_ref()
             .and_then(|x| x.device.as_ref())
             .is_none_or(|d| d.is_computer());
-        let delay = if on_computer { self.output_delay_ms() } else { 0.0 };
-        let link = t
-            .id
-            .as_ref()
-            .and_then(|id| self.cfg.spotify.links.get(id))
-            .map(|l| l.offset_ms)
-            .unwrap_or(0.0);
+        let delay = if on_computer {
+            self.output_delay_ms()
+        } else {
+            0.0
+        };
+        let link =
+            t.id.as_ref()
+                .and_then(|id| self.cfg.spotify.links.get(id))
+                .map(|l| l.offset_ms)
+                .unwrap_or(0.0);
         e.position_s(now)
-            + (self.cfg.spotify.offset_ms + link + self.cfg.lyrics.offset_ms - delay) as f64 / 1000.0
+            + (self.cfg.spotify.offset_ms + link + self.cfg.lyrics.offset_ms - delay) as f64
+                / 1000.0
     }
 
     fn spotify_search_card(&mut self, ui: &mut egui::Ui) {
@@ -1599,7 +1726,10 @@ impl QwertoneApp {
                 ui.label(RichText::new(n).small().color(p.tertiary));
             }
             let results = self.spotify.results.clone();
-            if results.is_empty() && !self.spotify.results_for.is_empty() && self.spotify.searching.is_none() {
+            if results.is_empty()
+                && !self.spotify.results_for.is_empty()
+                && self.spotify.searching.is_none()
+            {
                 ui.label(RichText::new("Nothing found.").color(p.outline));
             }
             for t in results {
@@ -1608,20 +1738,33 @@ impl QwertoneApp {
                     ui.vertical(|ui| {
                         ui.label(RichText::new(&t.name).strong());
                         ui.label(
-                            RichText::new(format!("{} · {} · {}", t.artist_line(), t.album, fmt_ms(t.duration_ms as f64)))
-                                .small()
-                                .color(p.on_surface_variant),
+                            RichText::new(format!(
+                                "{} · {} · {}",
+                                t.artist_line(),
+                                t.album,
+                                fmt_ms(t.duration_ms as f64)
+                            ))
+                            .small()
+                            .color(p.on_surface_variant),
                         );
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("Learn this").clicked() {
                             self.spotify_learn(&t);
                         }
-                        if ui.small_button("▶ Play").on_hover_text("Play it on Spotify").clicked() {
+                        if ui
+                            .small_button("▶ Play")
+                            .on_hover_text("Play it on Spotify")
+                            .clicked()
+                        {
                             self.spotify_play_track(&t, None);
                         }
-                        if t.id.as_ref().is_some_and(|id| self.cfg.spotify.links.contains_key(id)) {
-                            ui.label(RichText::new("🎹").color(p.primary)).on_hover_text("Has a practice version");
+                        if t.id
+                            .as_ref()
+                            .is_some_and(|id| self.cfg.spotify.links.contains_key(id))
+                        {
+                            ui.label(RichText::new("🎹").color(p.primary))
+                                .on_hover_text("Has a practice version");
                         }
                     });
                 });
@@ -1631,20 +1774,35 @@ impl QwertoneApp {
 
     fn spotify_learn_card(&mut self, ui: &mut egui::Ui) {
         let p = self.palette;
-        let Some(Learn::Choose { track, songs, files }) = self.spotify.learn.clone() else {
+        let Some(Learn::Choose {
+            track,
+            songs,
+            files,
+        }) = self.spotify.learn.clone()
+        else {
             return;
         };
         let (job, job_err) = self.song_job_status();
         card(ui, &p, &format!("Learn “{}”", track.name), |ui| {
             if let Some((file, frac, msg)) = &job {
-                ui.label(RichText::new(format!(
-                    "Analysing {}",
-                    file.file_name().unwrap_or_default().to_string_lossy()
-                ))
-                .strong());
-                ui.add(egui::ProgressBar::new(*frac).show_percentage().animate(true));
+                ui.label(
+                    RichText::new(format!(
+                        "Analysing {}",
+                        file.file_name().unwrap_or_default().to_string_lossy()
+                    ))
+                    .strong(),
+                );
+                ui.add(
+                    egui::ProgressBar::new(*frac)
+                        .show_percentage()
+                        .animate(true),
+                );
                 ui.label(RichText::new(msg).small().color(p.on_surface_variant));
-                ui.label(RichText::new("It opens by itself when done (a few minutes the first time).").small().color(p.outline));
+                ui.label(
+                    RichText::new("It opens by itself when done (a few minutes the first time).")
+                        .small()
+                        .color(p.outline),
+                );
                 if ui.small_button("Cancel").clicked() {
                     self.song_cancel_analysis();
                     self.spotify.pending_link = None;
@@ -1669,10 +1827,17 @@ impl QwertoneApp {
                         ui.label(format!(
                             "{}{} · {}",
                             e.title,
-                            e.artist.as_ref().map(|a| format!(" — {a}")).unwrap_or_default(),
+                            e.artist
+                                .as_ref()
+                                .map(|a| format!(" — {a}"))
+                                .unwrap_or_default(),
                             fmt_ms(e.duration * 1000.0)
                         ));
-                        ui.label(RichText::new(format!("{:.0}% sure", s * 100.0)).small().color(p.outline));
+                        ui.label(
+                            RichText::new(format!("{:.0}% sure", s * 100.0))
+                                .small()
+                                .color(p.outline),
+                        );
                         if ui.small_button("Yes, use it").clicked() {
                             let path = e.path.clone();
                             if let Some(link) = self.spotify_make_link(&track, &path) {
@@ -1688,17 +1853,28 @@ impl QwertoneApp {
                 for (f, _) in &files {
                     ui.horizontal(|ui| {
                         ui.label(f.file_name().unwrap_or_default().to_string_lossy());
-                        if ui.small_button("Analyze this").on_hover_text(f.display().to_string()).clicked() {
+                        if ui
+                            .small_button("Analyze this")
+                            .on_hover_text(f.display().to_string())
+                            .clicked()
+                        {
                             self.spotify_use_file(&track, f);
                         }
                     });
                 }
             } else {
-                ui.label(RichText::new("No file with that name in your Music or Downloads folders.").small().color(p.outline));
+                ui.label(
+                    RichText::new("No file with that name in your Music or Downloads folders.")
+                        .small()
+                        .color(p.outline),
+                );
             }
             ui.horizontal(|ui| {
                 if ui
-                    .add_enabled(self.spotify.pick.is_none(), egui::Button::new("Choose a file…"))
+                    .add_enabled(
+                        self.spotify.pick.is_none(),
+                        egui::Button::new("Choose a file…"),
+                    )
                     .clicked()
                 {
                     self.spotify_pick_file(&track);

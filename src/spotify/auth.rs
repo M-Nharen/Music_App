@@ -22,7 +22,8 @@ use std::time::{Duration, Instant};
 pub const AUTHORIZE: &str = "https://accounts.spotify.com/authorize";
 pub const TOKEN: &str = "https://accounts.spotify.com/api/token";
 /// Read playback (now playing, sync) and control it. Search needs no scope.
-pub const SCOPES: &str = "user-read-playback-state user-modify-playback-state user-read-currently-playing";
+pub const SCOPES: &str =
+    "user-read-playback-state user-modify-playback-state user-read-currently-playing";
 /// How long the login page waits for you.
 pub const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -346,14 +347,19 @@ mod tests {
         assert_eq!(challenge(v), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
         let v = new_verifier();
         assert!((43..=128).contains(&v.len()));
-        assert!(v.bytes().all(|b| b.is_ascii_alphanumeric() || b"-._~".contains(&b)));
+        assert!(
+            v.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"-._~".contains(&b))
+        );
         assert_ne!(new_verifier(), v);
     }
 
     #[test]
     fn urls_and_forms() {
         let u = authorize_url("abc123", 8898, "CH", "ST");
-        assert!(u.starts_with("https://accounts.spotify.com/authorize?response_type=code&client_id=abc123"));
+        assert!(u.starts_with(
+            "https://accounts.spotify.com/authorize?response_type=code&client_id=abc123"
+        ));
         assert!(u.contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A8898%2Fcallback"));
         assert!(u.contains("scope=user-read-playback-state%20user-modify-playback-state"));
         assert!(u.contains("code_challenge_method=S256&code_challenge=CH"));
@@ -394,8 +400,13 @@ mod tests {
         assert_eq!(t.expires_at, 4600);
         assert!(!t.expired(4000) && t.expired(4541));
         // A refresh without a new refresh token keeps the old one.
-        let r = Tokens::from_response(r#"{"access_token":"B","expires_in":3600}"#, Some("R"), "cid", 0)
-            .unwrap();
+        let r = Tokens::from_response(
+            r#"{"access_token":"B","expires_in":3600}"#,
+            Some("R"),
+            "cid",
+            0,
+        )
+        .unwrap();
         assert_eq!(r.refresh_token, "R");
         assert!(Tokens::from_response("{}", None, "cid", 0).is_err());
         // Debug never shows the secrets.
@@ -410,7 +421,11 @@ mod tests {
         let cancel = Arc::new(AtomicBool::new(false));
         let h = std::thread::spawn(move || wait_for_code(l, "st", cancel, Duration::from_secs(5)));
         let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
-        write!(s, "GET /callback?code=abc&state=st HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+        write!(
+            s,
+            "GET /callback?code=abc&state=st HTTP/1.1\r\nHost: x\r\n\r\n"
+        )
+        .unwrap();
         let mut reply = String::new();
         let _ = std::io::Read::read_to_string(&mut s, &mut reply);
         assert!(reply.starts_with("HTTP/1.1 200"));

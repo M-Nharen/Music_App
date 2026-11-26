@@ -87,7 +87,10 @@ impl Device {
                 .and_then(|x| x.as_str())
                 .unwrap_or_default()
                 .to_string(),
-            active: v.get("is_active").and_then(|x| x.as_bool()).unwrap_or(false),
+            active: v
+                .get("is_active")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(false),
             restricted: v
                 .get("is_restricted")
                 .and_then(|x| x.as_bool())
@@ -119,7 +122,10 @@ impl Playback {
             return None;
         }
         Some(Playback {
-            playing: v.get("is_playing").and_then(|x| x.as_bool()).unwrap_or(false),
+            playing: v
+                .get("is_playing")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(false),
             progress_ms: v.get("progress_ms").and_then(|x| x.as_u64()).unwrap_or(0),
             track: v.get("item").and_then(Track::from_json),
             device: v.get("device").and_then(Device::from_json),
@@ -239,14 +245,17 @@ mod tests {
     #[test]
     fn errors() {
         assert_eq!(
-            error_of(r#"{"error": {"status": 404, "message": "No active device found", "reason": "NO_ACTIVE_DEVICE"}}"#),
+            error_of(
+                r#"{"error": {"status": 404, "message": "No active device found", "reason": "NO_ACTIVE_DEVICE"}}"#
+            ),
             (
                 Some("No active device found".into()),
                 Some("NO_ACTIVE_DEVICE".into())
             )
         );
         assert_eq!(
-            error_of(r#"{"error": "invalid_grant", "error_description": "Refresh token revoked"}"#).1,
+            error_of(r#"{"error": "invalid_grant", "error_description": "Refresh token revoked"}"#)
+                .1,
             Some("invalid_grant".into())
         );
         assert_eq!(error_of("<html>"), (None, None));

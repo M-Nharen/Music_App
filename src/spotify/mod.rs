@@ -98,11 +98,24 @@ pub struct Client {
 
 impl Client {
     pub fn start(store_pref: String, repaint: impl Fn() + Send + 'static) -> Client {
+        Client::start_with(api::API.to_string(), store_pref, repaint)
+    }
+
+    /// With another API address (tests use a fake server).
+    pub fn start_with(
+        api_base: String,
+        store_pref: String,
+        repaint: impl Fn() + Send + 'static,
+    ) -> Client {
         let (tx, wrx) = unbounded::<Req>();
         let (wtx, rx) = unbounded::<Ev>();
         std::thread::Builder::new()
             .name("qwertone-spotify".into())
-            .spawn(move || Worker::new(store_pref, wtx, Box::new(repaint)).run(wrx))
+            .spawn(move || {
+                let mut w = Worker::new(store_pref, wtx, Box::new(repaint));
+                w.api_base = api_base;
+                w.run(wrx)
+            })
             .expect("spawn the Spotify thread");
         Client { tx, rx }
     }
@@ -182,6 +195,7 @@ fn call(
 
 struct Worker {
     agent: ureq::Agent,
+    api_base: String,
     limiter: Limiter,
     tokens: Option<Tokens>,
     store_pref: String,
@@ -200,6 +214,7 @@ impl Worker {
     fn new(store_pref: String, tx: Sender<Ev>, repaint: Box<dyn Fn() + Send>) -> Worker {
         Worker {
             agent: agent(),
+            api_base: api::API.to_string(),
             limiter: Limiter::new(),
             tokens: None,
             store_pref,
@@ -323,7 +338,13 @@ impl Worker {
         }
     }
 
-    fn control(&mut self, method: &str, path: &str, body: Option<(&str, String)>, what: &'static str) {
+    fn control(
+        &mut self,
+        method: &str,
+        path: &str,
+        body: Option<(&str, String)>,
+        what: &'static str,
+    ) {
         if let Outcome::Ok(_) = self.api(method, path, body, Urgency::User, what) {
             self.emit(Ev::Done(what));
         }
@@ -336,7 +357,8 @@ impl Worker {
         if !t.expired(auth::unix_now()) {
             return Some(t.access_token.clone());
         }
-        self.refresh().then(|| self.tokens.as_ref().unwrap().access_token.clone())
+        self.refresh()
+            .then(|| self.tokens.as_ref().unwrap().access_token.clone())
     }
 
     fn refresh(&mut self) -> bool {
@@ -457,7 +479,7 @@ impl Worker {
                 self.report_blocked(b, what);
                 return Outcome::Stopped;
             }
-            let url = format!("{}{}", api::API, path);
+            let url = format!("{}{}", self.api_base, path);
             let a = match call(&self.agent, method, &url, Some(&token), body.clone()) {
                 Ok(a) => a,
                 Err(Fail::Net(e)) => {
@@ -532,9 +554,7 @@ impl Worker {
 fn merge(batch: Vec<Req>) -> Vec<Req> {
     let mut out: Vec<Req> = Vec::new();
     let mut poll = false;
-    let last_search = batch
-        .iter()
-        .rposition(|r| matches!(r, Req::Search(_)));
+    let last_search = batch.iter().rposition(|r| matches!(r, Req::Search(_)));
     let last_seek = batch.iter().rposition(|r| matches!(r, Req::Seek(_)));
     for (i, r) in batch.into_iter().enumerate() {
         match r {
@@ -564,10 +584,17 @@ pub struct Login {
 impl Login {
     /// Open the browser and wait (in the background) for Spotify to send
     /// it back, then swap the code for tokens.
-    pub fn start(client_id: &str, port: u16, repaint: impl Fn() + Send + 'static) -> Result<Login, String> {
+    pub fn start(
+        client_id: &str,
+        port: u16,
+        repaint: impl Fn() + Send + 'static,
+    ) -> Result<Login, String> {
         let client_id = client_id.trim().to_string();
         if client_id.len() < 16 || !client_id.chars().all(|c| c.is_ascii_alphanumeric()) {
-            return Err("That doesn't look like a Client ID (32 letters and digits from your app's page).".into());
+            return Err(
+                "That doesn't look like a Client ID (32 letters and digits from your app's page)."
+                    .into(),
+            );
         }
         let listener = auth::bind(port)?;
         let verifier = auth::new_verifier();
@@ -580,29 +607,31 @@ impl Login {
         std::thread::Builder::new()
             .name("qwertone-spotify-login".into())
             .spawn(move || {
-                let res = auth::wait_for_code(listener, &state, c2, auth::LOGIN_TIMEOUT).and_then(|code| {
-                    let a = call(
-                        &agent(),
-                        "POST",
-                        auth::TOKEN,
-                        None,
-                        Some((
-                            "application/x-www-form-urlencoded",
-                            auth::code_request(&client_id, port, &code, &verifier),
-                        )),
-                    )
-                    .map_err(|Fail::Net(e)| format!("Couldn't reach Spotify: {e}"))?;
-                    if a.status != 200 {
-                        let (msg, _) = api::error_of(&a.body);
-                        return Err(format!(
-                            "Spotify didn't accept the login: {}. Check the Client ID and that \
+                let res = auth::wait_for_code(listener, &state, c2, auth::LOGIN_TIMEOUT).and_then(
+                    |code| {
+                        let a = call(
+                            &agent(),
+                            "POST",
+                            auth::TOKEN,
+                            None,
+                            Some((
+                                "application/x-www-form-urlencoded",
+                                auth::code_request(&client_id, port, &code, &verifier),
+                            )),
+                        )
+                        .map_err(|Fail::Net(e)| format!("Couldn't reach Spotify: {e}"))?;
+                        if a.status != 200 {
+                            let (msg, _) = api::error_of(&a.body);
+                            return Err(format!(
+                                "Spotify didn't accept the login: {}. Check the Client ID and that \
                              {} is in the app's Redirect URIs.",
-                            msg.unwrap_or_else(|| format!("HTTP {}", a.status)),
-                            auth::redirect_uri(port)
-                        ));
-                    }
-                    Tokens::from_response(&a.body, None, &client_id, auth::unix_now())
-                });
+                                msg.unwrap_or_else(|| format!("HTTP {}", a.status)),
+                                auth::redirect_uri(port)
+                            ));
+                        }
+                        Tokens::from_response(&a.body, None, &client_id, auth::unix_now())
+                    },
+                );
                 let _ = tx.send(res);
                 repaint();
             })
@@ -624,6 +653,175 @@ impl Drop for Login {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Mutex;
+
+    /// A fake Web API: answers by path from a script the test changes, and
+    /// logs every request it gets.
+    struct Fake {
+        port: u16,
+        log: Arc<Mutex<Vec<String>>>,
+        answer: Arc<Mutex<(u16, Vec<(String, String)>, String)>>,
+    }
+
+    fn fake() -> Fake {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let answer = Arc::new(Mutex::new((200u16, vec![], String::new())));
+        let (lg, an) = (log.clone(), answer.clone());
+        std::thread::spawn(move || {
+            for s in l.incoming() {
+                let Ok(mut s) = s else { continue };
+                let mut r = BufReader::new(s.try_clone().unwrap());
+                let mut first = String::new();
+                r.read_line(&mut first).unwrap();
+                let mut len = 0usize;
+                loop {
+                    let mut h = String::new();
+                    r.read_line(&mut h).unwrap();
+                    if h.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = h.to_lowercase().strip_prefix("content-length:") {
+                        len = v.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut body = vec![0u8; len];
+                r.read_exact(&mut body).unwrap();
+                lg.lock().unwrap().push(first.trim().to_string());
+                let (st, hs, b) = an.lock().unwrap().clone();
+                let mut resp = format!(
+                    "HTTP/1.1 {st} X\r\nContent-Length: {}\r\nConnection: close\r\n",
+                    b.len()
+                );
+                for (k, v) in hs {
+                    resp += &format!("{k}: {v}\r\n");
+                }
+                resp += "\r\n";
+                resp += &b;
+                let _ = s.write_all(resp.as_bytes());
+            }
+        });
+        Fake { port, log, answer }
+    }
+
+    fn wait_for(c: &Client, pred: impl Fn(&Ev) -> bool) -> Ev {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if let Ok(e) = c.rx.recv_timeout(Duration::from_millis(100))
+                && pred(&e)
+            {
+                return e;
+            }
+        }
+        panic!("no such event");
+    }
+
+    fn logged_in(f: &Fake) -> Client {
+        let c = Client::start_with(
+            format!("http://127.0.0.1:{}/v1", f.port),
+            "file".into(),
+            || {},
+        );
+        c.send(Req::SetLogin(
+            Box::new(Tokens {
+                access_token: "AT".into(),
+                refresh_token: "RT".into(),
+                expires_at: auth::unix_now() + 3600,
+                scope: String::new(),
+                client_id: "cid".into(),
+            }),
+            "file".into(),
+        ));
+        c
+    }
+
+    #[test]
+    fn a_429_pauses_everything_until_retry_after() {
+        let f = fake();
+        let c = logged_in(&f);
+        *f.answer.lock().unwrap() = (
+            200,
+            vec![],
+            r#"{"is_playing": true, "progress_ms": 1000, "item": {"id": "a", "uri": "u", "name": "N",
+                "duration_ms": 5000, "artists": [], "album": {"name": ""}}}"#
+                .into(),
+        );
+        c.send(Req::Poll);
+        match wait_for(&c, |e| matches!(e, Ev::Playback { .. })) {
+            Ev::Playback { pb: Some(pb), .. } => assert_eq!(pb.progress_ms, 1000),
+            e => panic!("{e:?}"),
+        }
+        // Now Spotify says: quota used up, come back in 120 s.
+        *f.answer.lock().unwrap() = (
+            429,
+            vec![("Retry-After".into(), "120".into())],
+            r#"{"error": {"status": 429, "message": "Too many requests", "reason": "QUOTA_EXCEEDED"}}"#.into(),
+        );
+        let before = Instant::now();
+        c.send(Req::Poll);
+        match wait_for(&c, |e| matches!(e, Ev::Paused { .. })) {
+            Ev::Paused { until, why } => {
+                assert_eq!(why, limit::Why::Quota);
+                assert!(until >= before + Duration::from_secs(120));
+            }
+            e => panic!("{e:?}"),
+        }
+        let n = f.log.lock().unwrap().len();
+        assert_eq!(n, 2);
+        // Everything after that is refused here, without a request.
+        for r in [
+            Req::Poll,
+            Req::Search("x".into()),
+            Req::Pause,
+            Req::Seek(5),
+            Req::Poll,
+        ] {
+            c.send(r);
+            assert!(matches!(
+                wait_for(&c, |e| matches!(e, Ev::Paused { .. })),
+                Ev::Paused { .. }
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(f.log.lock().unwrap().len(), n, "no request while paused");
+    }
+
+    #[test]
+    fn controls_and_search_hit_the_right_endpoints() {
+        let f = fake();
+        let c = logged_in(&f);
+        *f.answer.lock().unwrap() = (204, vec![], String::new());
+        c.send(Req::Pause);
+        wait_for(&c, |e| matches!(e, Ev::Done("pause")));
+        c.send(Req::Seek(61_000));
+        wait_for(&c, |e| matches!(e, Ev::Done("seek")));
+        *f.answer.lock().unwrap() = (200, vec![], r#"{"tracks": {"items": []}}"#.into());
+        c.send(Req::Search("arabic kuthu".into()));
+        wait_for(&c, |e| matches!(e, Ev::Search { .. }));
+        // Nothing playing anywhere.
+        *f.answer.lock().unwrap() = (
+            404,
+            vec![],
+            r#"{"error": {"status": 404, "message": "No active device found", "reason": "NO_ACTIVE_DEVICE"}}"#.into(),
+        );
+        c.send(Req::Play {
+            uri: Some("spotify:track:a".into()),
+            position_ms: None,
+            device: None,
+        });
+        wait_for(&c, |e| matches!(e, Ev::NoDevice));
+        let log = f.log.lock().unwrap().clone();
+        assert_eq!(log[0], "PUT /v1/me/player/pause HTTP/1.1");
+        assert_eq!(log[1], "PUT /v1/me/player/seek?position_ms=61000 HTTP/1.1");
+        assert_eq!(
+            log[2],
+            "GET /v1/search?type=track&limit=10&q=arabic%20kuthu HTTP/1.1"
+        );
+        assert_eq!(log[3], "PUT /v1/me/player/play HTTP/1.1");
+    }
 
     #[test]
     fn queued_requests_are_merged() {
