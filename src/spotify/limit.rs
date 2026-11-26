@@ -62,15 +62,6 @@ pub enum Blocked {
     Budget { at: Instant },
 }
 
-impl Blocked {
-    pub fn until(&self) -> Instant {
-        match self {
-            Blocked::Paused { until, .. } => *until,
-            Blocked::Budget { at } => *at,
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct Limiter {
     calls: VecDeque<Instant>,
@@ -181,12 +172,6 @@ impl Limiter {
             Some(_) => false,
             None => true,
         }
-    }
-
-    /// Calls in the current window.
-    pub fn in_window(&mut self, now: Instant) -> usize {
-        self.trim(now);
-        self.calls.len()
     }
 }
 

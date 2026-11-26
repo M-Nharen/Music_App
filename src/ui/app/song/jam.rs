@@ -66,7 +66,12 @@ impl QwertoneApp {
     /// The stems are the backing right now.
     pub(super) fn jam_active(&self) -> bool {
         let j = &self.song_ui.jam;
-        self.cfg.jam.on && j.set.is_some() && j.dir.is_some() && j.dir == self.jam_song_dir()
+        // Following Spotify (Part 8): Spotify is the sound, no stems.
+        self.cfg.jam.on
+            && !self.syncing()
+            && j.set.is_some()
+            && j.dir.is_some()
+            && j.dir == self.jam_song_dir()
     }
 
     fn jam_mine(&self) -> Vec<String> {

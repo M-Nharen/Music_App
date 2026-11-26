@@ -48,8 +48,6 @@ pub enum Req {
     Devices,
     /// Move playback to a device and play there.
     Transfer(String),
-    /// Track info (`GET /tracks/{id}`), when it isn't cached.
-    Track(String),
     /// "Try again" after an offline pause.
     RetryNow,
 }
@@ -72,7 +70,6 @@ pub enum Ev {
         received: Instant,
     },
     Devices(Vec<Device>),
-    Track(Track),
     /// A control went through.
     Done(&'static str),
     /// Spotify said there's no active device (open Spotify somewhere, or
@@ -273,16 +270,6 @@ impl Worker {
                         q,
                         tracks: api::parse_search(&v),
                     });
-                }
-            }
-            Req::Track(id) => {
-                let id: String = id.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
-                if let Outcome::Ok(a) =
-                    self.api("GET", &format!("/tracks/{id}"), None, Urgency::Poll, "track")
-                    && let Ok(v) = serde_json::from_str(&a.body)
-                    && let Some(t) = Track::from_json(&v)
-                {
-                    self.emit(Ev::Track(t));
                 }
             }
             Req::Play {

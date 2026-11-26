@@ -90,12 +90,6 @@ impl Estimate {
         };
         self.at = now;
     }
-
-    /// How far a new sample is from what we expected, ms (+ = Spotify is
-    /// ahead). Big jumps mean someone sought on another device.
-    pub fn drift_ms(&self, newer: &Estimate) -> f64 {
-        newer.position_ms(newer.at) - self.position_ms(newer.at)
-    }
 }
 
 /// When to ask Spotify for its playback state.
@@ -240,11 +234,6 @@ mod tests {
         assert!((e.position_ms(t0 + ms(10_000)) - 51_000.0).abs() < 1e-6);
         e.seek(1e9, t0 + ms(10_000));
         assert_eq!(e.progress_ms, 100_000.0);
-        // Drift: a newer sample 2 s ahead of what we expected.
-        let newer = Estimate::from_sample(None, 53_000, true, 100_000, t0 + ms(10_000), t0 + ms(10_000));
-        let mut base = e.clone();
-        base.seek(51_000.0, t0 + ms(10_000));
-        assert!((base.drift_ms(&newer) - 2000.0).abs() < 1e-6);
     }
 
     #[test]

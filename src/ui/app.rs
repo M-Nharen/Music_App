@@ -8,6 +8,7 @@ mod looper;
 mod play;
 mod record;
 mod song;
+mod spotify_tab;
 
 use crate::audio::patterns::Pattern;
 use crate::audio::sequencer::{ChordNotes, StyleKind, StyleParams};
@@ -45,6 +46,7 @@ enum Tab {
     Learn,
     Song,
     Listen,
+    Spotify,
     Keybinds,
     Audio,
     KeyTest,
@@ -132,6 +134,8 @@ pub struct QwertoneApp {
     /// Song mode (Part 5) and live listen.
     song_ui: song::SongUi,
     listen: listen::ListenUi,
+    /// Spotify (Part 8).
+    spotify: spotify_tab::SpotifyUi,
 
     toast: Option<(String, Instant)>,
     last_poll: Instant,
@@ -207,10 +211,12 @@ impl QwertoneApp {
             learn: learn::LearnUi::new(&Default::default()),
             song_ui: song::SongUi::new(),
             listen: listen::ListenUi::default(),
+            spotify: spotify_tab::SpotifyUi::new(&Default::default()),
             toast: None,
             last_poll: Instant::now(),
         };
         app.learn = learn::LearnUi::new(&app.cfg.learn);
+        app.spotify = spotify_tab::SpotifyUi::new(&app.cfg.spotify);
         app.set_missing_fonts(missing_fonts);
         if let Some(e) = cfg_err {
             app.notify(e);
@@ -1008,6 +1014,10 @@ impl QwertoneApp {
         if self.song_poll(ctx) {
             ctx.request_repaint_after(Duration::from_millis(15));
         }
+        // Spotify (Part 8): answers, polls while visible, lyrics lookups.
+        if self.spotify_poll(ctx) {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
 
         // Debounced config save.
         if let Some(since) = self.cfg_dirty_since
@@ -1165,6 +1175,7 @@ impl QwertoneApp {
                 (Tab::Learn, "Learn"),
                 (Tab::Song, "Song"),
                 (Tab::Listen, "Listen"),
+                (Tab::Spotify, "Spotify"),
                 (Tab::Keybinds, "Keybinds"),
                 (Tab::Audio, "Audio & latency"),
                 (Tab::KeyTest, "Keyboard test"),
@@ -1216,6 +1227,15 @@ impl QwertoneApp {
                 }
                 if self.loop_ui.midi.is_some() {
                     chip(ui, p.surface_container_high, p.on_surface, "MIDI out");
+                }
+                if let Some((text, limited)) = self.spotify_header_chip() {
+                    let (fill, fg) = if limited {
+                        (p.tertiary_container, p.on_surface)
+                    } else {
+                        (p.surface_container_high, p.on_surface_variant)
+                    };
+                    chip(ui, fill, fg, text);
+                    ui.ctx().request_repaint_after(Duration::from_secs(1));
                 }
             });
         });
@@ -1744,6 +1764,7 @@ impl eframe::App for QwertoneApp {
                 Tab::Learn => self.learn_tab(ui),
                 Tab::Song => self.song_tab(ui),
                 Tab::Listen => self.listen_tab(ui),
+                Tab::Spotify => self.spotify_tab(ui),
                 Tab::Keybinds => self.keybinds_tab(ui),
                 Tab::Audio => self.audio_tab(ui),
                 Tab::KeyTest => self.keytest_tab(ui),

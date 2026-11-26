@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::song::lyrics::{
-    Layer, Layers, Lyrics, LyricsEditor, SourceOf, parse_lrc as parse_pasted, parse_lrc_time,
+    Layer, Layers, Lyrics, LyricsEditor, SourceOf, parse_lrc as parse_pasted,
 };
 use egui::text::{LayoutJob, TextFormat};
 use egui::{Align2, FontId, Pos2, Rect, Sense, pos2};

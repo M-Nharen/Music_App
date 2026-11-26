@@ -62,7 +62,7 @@ pub(super) struct SongUi {
     job_error: Option<(String, Vec<String>)>,
     opts: Options,
     // The song.
-    song: Option<Song>,
+    pub song: Option<Song>,
     grid: BeatGrid,
     data: Option<Arc<SongData>>,
     /// Old song data kept alive so the audio thread never frees it.
@@ -214,9 +214,14 @@ impl QwertoneApp {
         base.max(0.0)
     }
 
+    /// Wait mode, unless following Spotify (Spotify doesn't wait).
+    pub(super) fn song_wait(&self) -> bool {
+        self.cfg.song.wait && !self.syncing()
+    }
+
     fn practice_settings(&self) -> Settings {
         Settings {
-            wait: self.cfg.song.wait,
+            wait: self.song_wait(),
             any_octave: self.cfg.song.any_octave,
             ..Default::default()
         }
@@ -237,6 +242,79 @@ impl QwertoneApp {
         c.playing && !c.moving && !c.ended
     }
 
+    // ------------------------------------------------- for the Spotify tab
+
+    /// Analysed songs (scanned once).
+    pub(super) fn song_library_entries(&mut self) -> Vec<Entry> {
+        if !self.song_ui.scanned {
+            self.song_rescan();
+        }
+        self.song_ui.library.clone()
+    }
+
+    /// Start the analyzer on a file with the Song tab's options.
+    pub(super) fn song_start_analysis(&mut self, path: &std::path::Path) -> Result<(), String> {
+        if self.song_ui.job.is_some() {
+            return Err("Another song is being analysed; wait for it to finish.".into());
+        }
+        let program = self
+            .song_ui
+            .analyzer
+            .clone()
+            .or_else(analyze::find_analyzer)
+            .ok_or("The analyzer isn't installed yet (cd analyzer && ./setup.sh).")?;
+        self.song_ui.analyzer = Some(program.clone());
+        self.song_ui.job_error = None;
+        self.song_ui.analyze_path = path.display().to_string();
+        let j = Job::start(&program, path, self.song_ui.opts.clone())?;
+        self.song_ui.job = Some(j);
+        Ok(())
+    }
+
+    /// The running analysis: (file, 0–1, message), or its error.
+    pub(super) fn song_job_status(&self) -> (Option<(PathBuf, f32, String)>, Option<String>) {
+        (
+            self.song_ui
+                .job
+                .as_ref()
+                .map(|j| (j.file.clone(), j.fraction(), j.message.clone())),
+            self.song_ui.job_error.as_ref().map(|e| e.0.clone()),
+        )
+    }
+
+    pub(super) fn song_cancel_analysis(&mut self) {
+        if let Some(j) = &mut self.song_ui.job {
+            j.cancel();
+        }
+    }
+
+    pub(super) fn song_lyrics_reload(&mut self) {
+        self.lyrics_load();
+    }
+
+    /// The open song's folder or file.
+    pub(super) fn song_open_path(&self) -> Option<PathBuf> {
+        self.song_ui.song.as_ref().and_then(|s| match &s.origin {
+            crate::song::Origin::Folder(p) | crate::song::Origin::Midi(p) => Some(p.clone()),
+            crate::song::Origin::Memory => None,
+        })
+    }
+
+    /// The song's own clock (audio thread), where it is right now.
+    pub(super) fn song_clock_now(&self) -> (f64, bool) {
+        let c = &self.song_ui.clock;
+        let pos = if c.moving {
+            c.pos + Instant::now().saturating_duration_since(c.at).as_secs_f64() * c.speed
+        } else {
+            c.pos
+        };
+        (pos, c.playing)
+    }
+
+    pub(super) fn song_clear_ended(&mut self) {
+        self.song_ui.clock.ended = false;
+    }
+
     // ------------------------------------------------------------ loading
 
     pub(super) fn song_rescan(&mut self) {
@@ -247,6 +325,9 @@ impl QwertoneApp {
     }
 
     pub(super) fn open_song(&mut self, path: &std::path::Path) {
+        // Opening a song by hand stops following Spotify (sync mode sets
+        // itself up again right after opening its own song).
+        self.spotify_stop_sync_quiet();
         match Song::load(path) {
             Ok(song) => {
                 let title = song.display_name();
@@ -466,6 +547,10 @@ impl QwertoneApp {
     }
 
     fn song_mute_mask(&self) -> u64 {
+        // Following Spotify: Spotify is the sound; the song only keeps time.
+        if self.syncing() {
+            return !0;
+        }
         let su = &self.song_ui;
         let mut m = 0u64;
         let jam = self.jam_active();
@@ -549,7 +634,7 @@ impl QwertoneApp {
             self.cfg.song.any_octave,
             self.song_ui.play_parts,
             self.song_ui.play_chords,
-            self.cfg.song.wait,
+            self.song_wait(),
         )
     }
 
@@ -703,6 +788,15 @@ impl QwertoneApp {
     }
 
     pub(super) fn song_play_pause(&mut self) {
+        if self.syncing() {
+            self.spotify_toggle();
+            return;
+        }
+        self.song_play_pause_local();
+    }
+
+    /// Play / pause the song's own clock (sync mode drives it directly).
+    pub(super) fn song_play_pause_local(&mut self) {
         if self.song_ui.song.is_none() {
             return;
         }
@@ -729,7 +823,7 @@ impl QwertoneApp {
             self.song_ui.passes.clear();
             self.song_ui.sent_wait = Some(f64::NAN);
         }
-        if self.cfg.song.count_in {
+        if self.cfg.song.count_in && !self.syncing() {
             let g = &self.song_ui.grid;
             let from = g.time_at(g.beat_at(start) - g.beats_per_bar() as f64);
             self.song_ui.counting_in = Some(start);
@@ -752,6 +846,15 @@ impl QwertoneApp {
 
     /// Jump to a time; practice results from there on are forgotten.
     pub(super) fn song_seek(&mut self, t: f64) {
+        if self.syncing() {
+            // Seek Spotify; the song follows it.
+            self.spotify_seek_song(t);
+            return;
+        }
+        self.song_seek_local(t);
+    }
+
+    pub(super) fn song_seek_local(&mut self, t: f64) {
         let t = t.clamp(
             -4.0,
             self.song_ui
@@ -778,6 +881,10 @@ impl QwertoneApp {
 
     /// Back to the loop start (or the beginning) and play.
     pub(super) fn song_restart(&mut self) {
+        if self.syncing() {
+            self.spotify_seek_song(0.0);
+            return;
+        }
         let start = self
             .song_ui
             .looping
@@ -794,12 +901,20 @@ impl QwertoneApp {
     }
 
     pub(super) fn song_set_speed(&mut self, s: f64) {
+        if self.syncing() {
+            self.notify("Following Spotify: the speed is Spotify's (100 %). Stop following to slow down.");
+            return;
+        }
         let s = (s * 20.0).round() / 20.0;
         self.song_ui.speed = s.clamp(0.25, 1.5);
         self.song_send(SongCommand::Speed(self.song_ui.speed));
     }
 
     fn song_set_loop(&mut self, l: Option<(f64, f64)>) {
+        if self.syncing() && l.is_some() {
+            self.notify("Loops don't work while following Spotify. Stop following to loop a part.");
+            return;
+        }
         self.song_ui.looping = l.filter(|(a, b)| b - a > 0.2);
         self.song_send_loop();
         self.song_ui.passes.clear();
@@ -890,12 +1005,16 @@ impl QwertoneApp {
             }
             if let Some(res) = job.result.clone() {
                 let log = job.log.clone();
+                let job_file = job.file.clone();
                 self.song_ui.job = None;
                 match res {
                     Ok(dir) => {
                         self.song_rescan();
                         self.notify("Analysis done. Opening the song…");
+                        let file = job_file.clone();
                         self.open_song(&dir);
+                        // A "Learn this" from Spotify: remember the pair.
+                        self.spotify_on_analyzed(&file, &dir);
                     }
                     Err(e) => self.song_ui.job_error = Some((e, log)),
                 }
@@ -968,6 +1087,9 @@ impl QwertoneApp {
             self.song_rebuild(false);
         }
         self.song_clock_tick();
+        if self.syncing() {
+            self.spotify_sync_tick();
+        }
         busy || self.song_ui.clock.playing
     }
 
@@ -1015,7 +1137,7 @@ impl QwertoneApp {
             self.song_loop_pass();
         }
         let speed = self.song_ui.speed;
-        let wait = self.cfg.song.wait;
+        let wait = self.song_wait();
         if let Some(p) = &mut self.song_ui.practice {
             if c.playing && !wait {
                 let missed = p.update(heard, speed);
@@ -1327,7 +1449,7 @@ impl QwertoneApp {
                 continue;
             };
             let dt = dt - 0.3;
-            let kind = if dt <= 0.2 || (self.cfg.song.wait && self.halted() && dt <= 0.35) {
+            let kind = if dt <= 0.2 || (self.song_wait() && self.halted() && dt <= 0.35) {
                 HintKind::Now
             } else {
                 HintKind::Next
@@ -1697,8 +1819,17 @@ impl QwertoneApp {
         let top_y = ui.cursor().min.y;
         self.song_top_bar(ui);
         ui.add_space(4.0);
-        self.song_transport(ui);
-        self.song_jam(ui);
+        if self.syncing() {
+            // Following Spotify (Part 8): Spotify's controls, no speed /
+            // loops / wait / jam.
+            self.spotify_sync_bar(ui);
+            egui::CollapsingHeader::new("Lyrics")
+                .id_salt("song-lyrics")
+                .show(ui, |ui| self.lyrics_card(ui));
+        } else {
+            self.song_transport(ui);
+            self.song_jam(ui);
+        }
         ui.add_space(4.0);
         // Timeline.
         let (dur, sections, marks) = {
@@ -1963,7 +2094,7 @@ impl QwertoneApp {
             if self.song_ui.counting_in.is_some() {
                 chip(ui, p.tertiary_container, p.on_surface, "count-in…");
             }
-            if self.halted() && self.cfg.song.wait {
+            if self.halted() && self.song_wait() {
                 chip(ui, p.tertiary, p.surface, "waiting for you");
             }
             ui.separator();
@@ -2337,7 +2468,7 @@ impl QwertoneApp {
             && at.elapsed() < Duration::from_millis(900)
         {
             let (text, c) = match hit.judgement {
-                Judgement::Perfect if self.cfg.song.wait => ("Yes!".to_string(), p.primary),
+                Judgement::Perfect if self.song_wait() => ("Yes!".to_string(), p.primary),
                 Judgement::Perfect => ("Perfect".to_string(), p.primary),
                 Judgement::Good if hit.offset < 0.0 => (
                     format!("Good · {:.0} ms early", -hit.offset * 1000.0),
@@ -2527,7 +2658,7 @@ impl QwertoneApp {
                         }
                     });
                 }
-                if self.cfg.song.wait {
+                if self.song_wait() {
                     ui.label(
                         RichText::new("Wait mode: no rush, timing isn't scored.")
                             .small()
