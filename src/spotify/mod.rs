@@ -671,12 +671,15 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::Mutex;
 
+    /// The fake's next answer: status, headers, body.
+    type Answer = (u16, Vec<(String, String)>, String);
+
     /// A fake Web API: answers by path from a script the test changes, and
     /// logs every request it gets.
     struct Fake {
         port: u16,
         log: Arc<Mutex<Vec<String>>>,
-        answer: Arc<Mutex<(u16, Vec<(String, String)>, String)>>,
+        answer: Arc<Mutex<Answer>>,
     }
 
     fn fake() -> Fake {

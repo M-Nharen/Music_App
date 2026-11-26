@@ -94,7 +94,11 @@ impl Day {
     pub fn short_label(self) -> String {
         const WD: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         let (_, m, d) = self.ymd();
-        format!("{} {d} {}", WD[self.weekday() as usize], MONTHS[m as usize - 1])
+        format!(
+            "{} {d} {}",
+            WD[self.weekday() as usize],
+            MONTHS[m as usize - 1]
+        )
     }
 }
 

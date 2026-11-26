@@ -60,7 +60,10 @@ enum Tab {
 
 impl Tab {
     fn is_settings(self) -> bool {
-        matches!(self, Tab::General | Tab::Keybinds | Tab::Audio | Tab::KeyTest)
+        matches!(
+            self,
+            Tab::General | Tab::Keybinds | Tab::Audio | Tab::KeyTest
+        )
     }
 }
 

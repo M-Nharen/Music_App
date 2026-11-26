@@ -275,7 +275,10 @@ impl QwertoneApp {
                         })
                         .response
                         .interact(egui::Sense::click());
-                    if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                    if resp
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
+                    {
                         picked = Some(id);
                     }
                     if i % 2 == 1 {
@@ -358,7 +361,9 @@ impl QwertoneApp {
                     let target = if path.exists() {
                         Some(path.clone())
                     } else {
-                        path.parent().filter(|d| d.exists()).map(|d| d.to_path_buf())
+                        path.parent()
+                            .filter(|d| d.exists())
+                            .map(|d| d.to_path_buf())
                     };
                     if ui
                         .add_enabled(target.is_some(), egui::Button::new("Open").small())

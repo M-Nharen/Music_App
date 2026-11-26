@@ -32,7 +32,7 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 6 | Python pipeline: Demucs stems → extraction modes (chords only / melody only via CREPE / chords+melody / full via Basic Pitch / single instrument incl. piano model + drums / simplified) + confidence highlighting + note editor. Live listen mode | **done** (analyzer on branch `part-6-analyzer`; the note editor and live listen mode were built in Rust in `part-5-songs`) |
 | 7 | Jam mode: stem mixer with your part muted, time-stretch, Bluetooth delay compensation of backing + visuals | **done** (branch `part-7-jam`, which also has 10a-lite + 10a-full merged in) |
 | 8 | Spotify: PKCE login, search, remote control, now-playing → open practice version, sync mode | **done** (branch `part-8-spotify`, from `part-10b-lyrics`) |
-| 9 | Polish: themes, stats, streaks, more lessons | |
+| 9 | Polish: themes, stats, streaks, more lessons, settings, README, rough edges | **done** (branch `part-9-polish`, from `part-8-spotify`; merged into `main`) |
 | 10a-lite | Lyrics engine, small (analyzer/ only): `.lrc` + embedded tags + LRCLIB synced lyrics, Tanglish transliteration, `lyrics.json` with source info for words / timing / translation | **done** (branch `part-10a-lyrics`) |
 | 10b | Lyrics in the app: Spotify-style Lyrics screen, current line inside the falling-notes area (toggle, top/bottom), source badge, lyrics editor, tap-along timing, Bluetooth offset + manual nudge | **done** (branch `part-10b-lyrics`, from `part-7-jam`) |
 | 10a-full | Lyrics engine, rest: Whisper (faster-whisper) transcription of the vocal stem with language auto-detect, force-aligning plain lyrics, offline English translation, AcoustID lookup | **done** (branch `part-10a-full`, includes 10a-lite) |
@@ -49,7 +49,7 @@ Each part starts from the newest branch (it contains everything before it). Don'
 | 3 | 7 Jam mode (**done**) | `part-4b-loop` (merged `part-10a-full` first) | `part-7-jam` | — |
 | 4 | 10b lyrics in the app (**done**) | `part-7-jam` | `part-10b-lyrics` | — |
 | 5 | 8 Spotify (also: sync lyrics with Spotify playback) (**done**) | `part-10b-lyrics` | `part-8-spotify` | — |
-| 6 | 9 Polish, then merge everything into `main` | `part-8-spotify` | `main` | — |
+| 6 | 9 Polish, then merge everything into `main` (**done**) | `part-8-spotify` | `part-9-polish` → `main` | — |
 
 ### Lyrics notes (Part 10)
 
@@ -76,6 +76,61 @@ Each part starts from the newest branch (it contains everything before it). Don'
   latency offset as Song mode (`visual_delay_ms()`, see Part 7's "line up").
 
 ## Notes for the next session
+
+### From Part 9 (polish) — the project is complete; `main` has everything
+
+- **Branches:** `part-9-polish` = `part-8-spotify` + Part 9. `main` was created
+  from it (every earlier part branch is an ancestor of `part-8-spotify`, so
+  `main` contains all of them). New work should branch from `main`. Make
+  `main` the default branch on GitHub (Settings → General → Default branch).
+- **Stats & streaks** (`src/stats.rs`, no egui, tested): `Day` = days since
+  1970 in the local time zone (`libc::localtime_r` for the offset; civil-date
+  maths from Howard Hinnant, no chrono), `Stats { days: "YYYY-MM-DD" →
+  DayStats, songs: id → SongRecord }` in `~/.local/share/qwertone/stats.json`
+  (atomic write at most every 30 s + on exit; a damaged file is renamed
+  `.json.bad`). `Tracker::note(activity)` is called from `play_key` for every
+  note / chord / drum hit (`count_note`, activity from the tab: Learn → Learn,
+  Song → Song, else Play); the gap since the last one is credited if
+  ≤ `IDLE_GAP` (30 s), else 2 s. A day counts for the streak at ≥ 60 s;
+  today not counting yet doesn't break it. Also counted: lessons finished the
+  first time (`finish_lesson`), right ear-training answers, song runs scored
+  to the end (`song_finished`, with title, best and last %). Song-mode
+  listening without pressing keys doesn't count, on purpose.
+- **Progress tab** (`ui/app/progress.rs`): streak / today vs goal / this week
+  vs last / all time, week bars with the goal line, a 20-week calendar (one
+  hue, 4 steps relative to the goal, hover = details), time split, songs,
+  reset (two clicks). Header chip "N-day streak" (click → Progress).
+- **Settings** (`ui/app/settings.rs`): the header has one Settings button for
+  `Tab::{General, Keybinds, Audio, KeyTest}` (`Tab::is_settings`,
+  `settings_page` remembers the last one; sub-nav row `settings_nav`). General
+  = look (end4 toggle moved here from the Audio tab; built-in themes in
+  `theme::builtin_themes`: violet / ocean / forest / light / contrast,
+  `Palette::is_light` picks egui's light visuals; `ui_scale` 0.8–1.6 via
+  `set_zoom_factor`, kept in step with egui's Ctrl +/- by `sync_zoom`),
+  practice goal + streak chip, file locations with Open (`open_path`: spawns
+  xdg-open and waits on a thread, no zombies; used everywhere now), about.
+  Config: `theme`, `ui_scale`, `[practice] goal_minutes, streak_chip`.
+- **Lessons:** chapters 8 (beats, first-tunes, inversions, melody-chords) and
+  9 (sargam, mayamalavagowla, mohanam): 30 lessons. Ids are saved: don't rename.
+- **Rough edges fixed:** Play tab keyboard was below the fold at the default
+  size (now: now-playing + explanation side by side, keyboard, then recorder /
+  looper); `card()` drops the justified layout it inherits inside
+  `ui.columns` (buttons were stretched, text spread to both edges); header
+  chips get their own row below ~1060 px (they covered the tabs at the 760 px
+  minimum); device chip shortened; Jam card closed by default (title says
+  on / off) so the falling notes fit; octave − / + and velocity clickable; a
+  broken `config.toml` is copied to `config.toml.broken` before the defaults
+  are used (the next save used to overwrite it); stale "(later parts)" text;
+  analyzer install hint; clippy clean.
+- **Checked:** `cargo test` (all pass), `cargo clippy --all-targets` (clean),
+  analyzer `pytest` (127 passed, 11 skipped = the real-model tests), every tab
+  under Xvfb at 1180×820 and 760×600, light and dark themes, Progress with
+  seeded stats. Not checked on real hardware (same list as before: Bluetooth
+  feel, real Spotify, live listen on a microphone, real Whisper / NLLB models).
+- **Ideas not done:** stats for ear-training per game over time; weekly goal /
+  reminders; exporting stats as CSV; a light-theme tuning pass for the
+  falling-notes colours (readable, but designed on dark); spaced repetition
+  (Parts 3 and 5 ideas); everything under "Ideas not done" below.
 
 ### From Part 8 (Spotify)
 

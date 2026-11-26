@@ -2,7 +2,9 @@
 
 Play music on your laptop keyboard. Built for Arch + Hyprland (end4 rice), works over Bluetooth earbuds, and lets you remap every key.
 
-> **Status: Parts 1–8 of 9, plus lyrics (10a, 10b).** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), metronome, recording and a looper, MIDI out, Song mode (falling notes, chord sheet, wait mode, loops, scoring, one-key mode, auto song layout), Jam mode (play along with the real recording's separated parts), a note editor, live listen mode, lyrics, Spotify (now playing, search, sync mode), the song analyzer with lyrics (`analyzer/`), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
+> **Status: complete (Parts 1–10).** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 30 lessons, ear-training games), metronome, recording and a looper, MIDI out, Song mode (falling notes, chord sheet, wait mode, loops, scoring, one-key mode, auto song layout), Jam mode (play along with the real recording's separated parts), a note editor, live listen mode, lyrics (in several languages, with an editor), Spotify (now playing, search, sync mode), practice stats and streaks, themes, the song analyzer (`analyzer/`), keybind editor, latency tools and a keyboard test. [PLAN.md](PLAN.md) has the design notes for every part.
+
+**Tabs at a glance:** [Play](#playing) · [Learn](#learn) · [Song](#songs) · [Listen](#listen) · [Spotify](#spotify) · [Progress](#progress) · [Settings](#settings) (General, [Keybinds](#keybinds), Audio & latency, Keyboard test)
 
 ## Install (Arch)
 
@@ -34,7 +36,7 @@ windowrulev2 = size 1180 820, class:^(qwertone)$
 windowrulev2 = opacity 0.96 0.92, class:^(qwertone)$
 ```
 
-Colours follow end4's Material You palette automatically (from `~/.local/state/quickshell/user/generated/colors.json`, or the older AGS `_material.scss`) and change when your wallpaper does.
+Colours follow end4's Material You palette automatically (from `~/.local/state/quickshell/user/generated/colors.json`, or the older AGS `_material.scss`) and change when your wallpaper does. Without end4 (or with *Match end4* unticked in **Settings → General**) you pick a built-in theme: Violet, Ocean, Forest (all dark), Light or High contrast.
 
 ## Playing
 
@@ -55,7 +57,7 @@ Pick a layout at the top of the **Play** tab, or press `F1` to cycle through the
 | `Tab` | Soft / normal / loud |
 | `Esc` | Stop all sound |
 
-The big readout names whatever chord you're holding (try `Z C B` = C major, `N Q E` = A minor).
+The octave and velocity can also be changed with the − / + and *Velocity* buttons in the toolbar. The big readout names whatever chord you're holding (try `Z C B` = C major, `N Q E` = A minor).
 
 ### Chords + Melody (easiest)
 
@@ -88,7 +90,7 @@ The key caps show the actual chord names and numerals, and they change live whil
 
 **Smooth chords** (on by default) picks the inversion that moves your hand least, like a pianist does: C → F plays C-F-A instead of jumping up to F-A-C.
 
-**Bluetooth:** the rhythm keeps perfect time inside the app, but you hear it ~200 ms late, so you'll naturally press chord changes a little late. Qwertone uses your measured latency (Audio tab) to let a chord pressed just after the beat still land on that beat.
+**Bluetooth:** the rhythm keeps perfect time inside the app, but you hear it ~200 ms late, so you'll naturally press chord changes a little late. Qwertone uses your measured latency (Settings → Audio & latency) to let a chord pressed just after the beat still land on that beat.
 
 ### Isomorphic
 
@@ -123,7 +125,7 @@ The **Key** and **Scale** pickers on the Play tab apply to every layout. Keys ge
 
 ### Metronome, recording and the looper
 
-The two bars under the chord panel on the Play tab:
+The two bars under the keyboard on the Play tab:
 
 - **Metronome** (F5), **tempo** (F7/F8, or drag), **Tap** (F6: tap in time to set the tempo), **Record** (F9): clicks in for 4 beats, records everything you play and saves `~/Music/qwertone/take-001.mid` when you press it again.
 - **Looper** (F10): clicks in, then records a loop of the length you picked (1–16 bars, or *Free*: press F10 again when you're done and it closes at the nearest bar line). The loop then plays round and round in time with the metronome.
@@ -133,11 +135,11 @@ The two bars under the chord panel on the Play tab:
   - Changing the tempo speeds the whole loop up or slows it down. Escape stops the loop; switching windows doesn't.
   - Press Record (F9) while a loop plays and the take starts at the top of the loop, with the loop in it.
 
-All of these keys can be changed on the Keybinds tab (`loop`, `loop-play`, `loop-undo`, `loop-clear`, `loop-mute 1`…).
+All of these keys can be changed in Settings → Keybinds (`loop`, `loop-play`, `loop-undo`, `loop-clear`, `loop-mute 1`…).
 
 ### MIDI out to other apps
 
-**Audio & latency → Virtual MIDI out → Send MIDI out** opens a MIDI port called **Qwertone**. Everything you play (notes, chords, bass, drums, loop layers; the song backing too if you tick it) goes out there, timed like the sound, so you can record it in a DAW or play it through another synth. It's an ALSA sequencer port, so ALSA apps see it directly and PipeWire shows it through its MIDI bridge (connect it in qpwgraph or Helvum, or `aconnect Qwertone:0 <synth>`). Untick *Also play the sound here* to hear only the other app.
+**Settings → Audio & latency → Virtual MIDI out → Send MIDI out** opens a MIDI port called **Qwertone**. Everything you play (notes, chords, bass, drums, loop layers; the song backing too if you tick it) goes out there, timed like the sound, so you can record it in a DAW or play it through another synth. It's an ALSA sequencer port, so ALSA apps see it directly and PipeWire shows it through its MIDI bridge (connect it in qpwgraph or Helvum, or `aconnect Qwertone:0 <synth>`). Untick *Also play the sound here* to hear only the other app.
 
 Channels: 1 melody, 2 chords, 3 bass, 10 drums; loop layers get their own channels from 16 downwards.
 
@@ -147,7 +149,7 @@ The **Learn** tab teaches music from zero, on your own keyboard and keybinds.
 
 **What you're hearing.** Whatever you play gets explained: the chord's name, its roman numeral in the key (V7 in C major), its job (home, away, tension), why it sounds happy, sad or tense, a Rest ↔ Tension meter, and how the move from the last chord sounds ("V → I: tension → release"). Two notes are named as an interval with songs that start with it. The same panel shows on the Play tab (untick **Explain** to hide it).
 
-**Lessons.** 23 short, hands-on lessons in 7 chapters:
+**Lessons.** 30 short, hands-on lessons in 9 chapters:
 
 1. Notes & octaves
 2. Intervals (each with famous songs that start with it)
@@ -156,6 +158,8 @@ The **Learn** tab teaches music from zero, on your own keyboard and keybinds.
 5. Progressions: home/away/tension, cadences, I–V–vi–IV, ii–V–I, borrowed chords
 6. The circle of fifths (drawn next to the lesson and following your chords)
 7. Modes
+8. Rhythm & first tunes: beats and tempo (with the metronome), Ode to Joy / Twinkle Twinkle / Frère Jacques, inversions, melody over chords
+9. Indian music: Sa Re Ga Ma (sargam and the Sa–Pa drone), Mayamalavagowla, Mohanam
 
 Lessons light up the keys to press in your current layout, numbered in order, and tick them off as you play. If your layout can't play a step (say, a black key in Chords + Melody), the lesson offers to switch. Lessons are written in C major; if you're in another key there's a one-click reset. Progress is saved.
 
@@ -191,11 +195,17 @@ The **Song** tab teaches you real songs on your own keys.
 - **Loops and wait mode** work as before. While the song waits for your note, the band holds its last sound and fades out.
 - The stems are loaded into memory when you open the song (about 40 MB per part for a 4-minute song; the card shows how much).
 
-**Bluetooth.** *Line up with my output delay* (on by default) shifts the backing and the falling notes by your earbuds' delay: press a key when its note reaches the line and your note comes out of the earbuds together with the band. (Without it the notes follow what you hear, and what you play sounds a little late against the backing.) The delay is the one you measured (Audio & latency → latency test); the scoring still forgives a slightly late press (the same grace window as the chord keys). If it still feels off, *Sound & sync → Nudge* moves things by a few ms.
+**Bluetooth.** *Line up with my output delay* (on by default) shifts the backing and the falling notes by your earbuds' delay: press a key when its note reaches the line and your note comes out of the earbuds together with the band. (Without it the notes follow what you hear, and what you play sounds a little late against the backing.) The delay is the one you measured (Settings → Audio & latency → latency test); the scoring still forgives a slightly late press (the same grace window as the chord keys). If it still feels off, *Sound & sync → Nudge* moves things by a few ms.
 
 **Edit notes.** *Edit notes* opens the part with the most unsure notes in a piano roll. **Tab** jumps to the next unsure note (it plays so you can check it by ear), ↑↓ change its pitch, drag to move, drag the right edge to resize, double-click to add, Delete removes, **Enter** marks it "looks right", Ctrl+Z undoes. **Save** (Ctrl+S) writes `song.json` (every note you touched gets confidence 1.0; a `song.json.bak` is kept) and refreshes the song's MIDI files. For a plain MIDI file it saves `<name>-edited.mid` next to it.
 
-**Lyrics.** *♪ Lyrics* shows the words big, following the song, and the current line also shows inside the falling notes. Lines are shown in English letters (Tanglish / Tenglish / Hinglish …) by default; the original script and the English machine translation can be switched on next to them.
+**Lyrics.** *♪ Lyrics* shows the words big, following the song (click a line to jump there), and the current line also shows inside the falling notes (top or bottom, from the *Lyrics* section; it can show the next line too). Songs can be in any language, and mixed ones (Hindi + English, say) are handled line by line:
+
+- Lines are shown in English letters (Tanglish / Tenglish / Hinglish …) by default; the original script (Tamil, Telugu, Devanagari … with the Noto fonts) and the English machine translation can be switched on next to them.
+- **Where they come from**: a synced `.lrc` next to your audio file or inside its tags, [LRCLIB](https://lrclib.net), or transcribed from the singing (Whisper). The badge on the Lyrics screen says which, and warns when they were generated and may be wrong. *Wrong language?* re-runs it in the right one.
+- **No lyrics yet?** *Find lyrics* runs the analyzer's lyrics step; *Quick (no models)* skips the speech models (your files and LRCLIB only); or import an `.lrc` / `.txt`, or paste the words.
+- **Fix them** in the lyrics editor: edit the text, nudge lines, or *tap along* (press a key at the start of each line while the song plays) to time plain lyrics. Ctrl+S saves; your edits are kept even if the lyrics are looked up again (*Forget my edits* undoes that).
+- **Nudge** moves the lyrics earlier / later if they're off. They use the same Bluetooth line-up as the notes.
 
 ## Spotify
 
@@ -211,9 +221,47 @@ The **Spotify** tab connects to your Spotify (Premium) account through your own 
 
 The **Listen** tab hears any audio input and shows the chord, the notes, the melody note (with a little tuner), the key so far and the chords heard, and lights the keys of your layout that play along. Pick the input that says *what the computer plays* to follow Spotify or a video without a microphone. Don't pick the earbuds' own microphone: Bluetooth switches to call quality while it's in use.
 
+## Progress
+
+The **Progress** tab shows how your practice is going:
+
+- **Streak**: days in a row you've played. A day counts after 1 minute of playing, and today not having counted *yet* doesn't break it. The header shows the streak too (click it to open Progress; hide it in Settings → General).
+- **Today** against your daily goal (10 minutes by default, set in Settings → General), **this week** compared with last week, and **all time**.
+- A bar per day of this week with the goal line, and a calendar of the last 20 weeks (brighter = more practice; hover a day for the details).
+- Where the time went (free play, lessons and ear training, songs), lessons done, ear-training answers, and **your songs**: runs, best and last score.
+
+Practice time only counts while you're actually playing: the time between notes, chords and drum hits, as long as you don't stop for more than 30 seconds. Leaving the app open doesn't add anything. The numbers are kept in `~/.local/share/qwertone/stats.json`, on your computer only; *Reset stats* (press twice) clears them.
+
+## Settings
+
+The **Settings** button holds four pages:
+
+- **General**: *Match end4 / wallpaper colours*, the built-in themes, **window size** (80–160 %; Ctrl + / Ctrl − / Ctrl 0 work too when your layout doesn't use Ctrl), the daily practice goal and the streak chip, and **where things are kept**, with an *Open* button for each folder.
+- **Keybinds**: see [below](#keybinds).
+- **Audio & latency**: the output device and Bluetooth codec, the audio engine and buffer size, the tap-along latency test, the SoundFont, instruments per device, virtual MIDI out and your saved devices. See [Bluetooth earbuds](#bluetooth-earbuds-galaxy-buds-live-sony-xm4).
+- **Keyboard test**: hold keys to see how many your laptop keyboard can sense at once (sound is off on this page).
+
+Spotify's own settings (Client ID, the login store, how often to check, the sync offset) are at the bottom of the Spotify tab.
+
+### Where things are kept
+
+| What | Where |
+|---|---|
+| Settings | `~/.config/qwertone/config.toml` (edit by hand if you like: the app reloads it; a file with a mistake is kept as `config.toml.broken` and the defaults are used) |
+| Keyboard layouts | `~/.config/qwertone/keymaps/*.toml` |
+| Accompaniment patterns | `~/.config/qwertone/patterns/*.toml` |
+| Analysed songs | `~/.local/share/qwertone/songs/<song>/` (`song.json`, MIDI, stems, `lyrics.json`) |
+| Practice stats | `~/.local/share/qwertone/stats.json` |
+| Recordings | `~/Music/qwertone/take-NNN.mid` |
+| Spotify login | the desktop keyring (`secret-tool`), else `~/.local/share/qwertone/spotify-login.json` (only you can read it) |
+| Spotify cache, lyrics for any track | `~/.cache/qwertone/` |
+| The analyzer | `analyzer/.venv`, linked as `~/.local/bin/qwertone-analyze`; its models in `~/.cache` (Hugging Face, torch) |
+
+To remove everything: uninstall the package (or delete the folder you cloned), then delete `~/.config/qwertone`, `~/.local/share/qwertone`, `~/.cache/qwertone` and `~/.local/bin/qwertone-analyze`.
+
 ## Keybinds
 
-Open the **Keybinds** tab:
+Open **Settings → Keybinds**:
 
 - Click any key on the drawn keyboard to set what it does (a note, a control, or nothing).
 - Or press **Rebind** next to an action and then press the new key. If that key was already in use, the two keys swap, so nothing loses its key without you noticing.
@@ -273,7 +321,7 @@ Settings live in `~/.config/qwertone/config.toml` and reload on save too (key, s
 
 Bluetooth adds roughly 150–250 ms of delay. That comes from the earbuds and the Bluetooth codec, not from Qwertone. To get the most out of it:
 
-1. **Audio & latency → Output.** If a lower-delay codec is available, click **Switch to a2dp-sink-sbc**. SBC has less delay than AAC or LDAC (LDAC on the XM4 has the most).
+1. **Settings → Audio & latency → Output.** If a lower-delay codec is available, click **Switch to a2dp-sink-sbc**. SBC has less delay than AAC or LDAC (LDAC on the XM4 has the most).
 2. **Run the latency test** with each pair and press **Save**. Song and Jam mode use this number to line up the falling notes, the backing and your own notes.
    Every saved pair appears under **Saved devices** (name, Bluetooth or wired, delay, instrument, and whether it's connected now), where you can rename, re-test or remove it.
 3. **Choose an instrument per device.** Sounds marked ✦ (pads, strings, organ, choir) have soft attacks that hide the delay. Qwertone switches to it automatically when those earbuds connect.
@@ -281,10 +329,14 @@ Bluetooth adds roughly 150–250 ms of delay. That comes from the earbuds and th
 
 ## Troubleshooting
 
-- **Crackles or pops:** Audio & latency → Buffer size → 256.
+- **Crackles or pops:** Settings → Audio & latency → Buffer size → 256.
 - **No sound:** check the Audio engine card for an error, then click **Restart audio**. Make sure PipeWire is running: `systemctl --user status pipewire`.
 - **Output card says it can't ask PipeWire:** install `libpulse` (it provides `pactl`).
-- **Some keys don't light up when held together:** that's your laptop keyboard (ghosting). Check it in the **Keyboard test** tab.
+- **Some keys don't light up when held together:** that's your laptop keyboard (ghosting). Check it in **Settings → Keyboard test**.
+- **Jam mode stutters or uses a lot of CPU:** run the release build (`cargo run --release`); a debug build is 20–50 × slower at time-stretching.
+- **Lyrics show boxes instead of letters:** install the Noto fonts (`sudo pacman -S noto-fonts`); the Lyrics screen lists the missing ones.
+- **The window is too small / too big:** Settings → General → Window size.
+- **Spotify says "paused for N min":** Spotify asked the app to slow down; it waits by itself. Keep using the Spotify app meanwhile. See [docs/SPOTIFY_SETUP.md](docs/SPOTIFY_SETUP.md).
 - **MIDI out says it can't open the ALSA sequencer:** load the module once with `sudo modprobe snd-seq` (to keep it, add `snd-seq` to `/etc/modules-load.d/snd-seq.conf`).
 - **Build fails on `pipewire`/`bindgen`:** install `clang`, or build without the native PipeWire backend: `cargo run --release --no-default-features`.
 
@@ -301,7 +353,8 @@ src/
   config.rs     settings, keymap files, SoundFont search, file watching
   devices.rs    current output / Bluetooth codec detection via pactl
   latency.rs    tap-along latency measurement
-  theme.rs      end4 / Material You colours and fonts
+  theme.rs      end4 / Material You colours, built-in themes, fonts
+  stats.rs      practice time, streaks, song records (stats.json)
   music.rs      note names, chord naming, instruments
   learn/        Learn mode logic (no UI): analysis.rs (the theory overlay),
                 intervals.rs, lessons.rs (all lesson content), ear.rs (games)
@@ -319,12 +372,22 @@ src/
                 file), rate limiter, polling + position estimate, API worker,
                 caches, matching tracks to songs, lyrics lookup
   ui/           egui app (app.rs, app/play.rs, app/learn.rs, app/song.rs,
-                app/listen.rs, app/keybinds.rs, app/record.rs, app/looper.rs,
-                app/spotify_tab.rs),
+                app/song/jam.rs, app/song/lyrics.rs, app/listen.rs,
+                app/keybinds.rs, app/record.rs, app/looper.rs,
+                app/spotify_tab.rs, app/progress.rs, app/settings.rs),
                 custom widgets, circle.rs,
                 song_view.rs (falling notes, chord sheet, timeline, piano roll),
                 visuals.rs (keyboard / fretboard / fingerboard / flute / pads / waveform)
 analyzer/       the Python song analyzer (see analyzer/README.md)
 ```
 
-Run the tests with `cargo test`.
+## Tests
+
+```bash
+cargo test                                   # the app: ~200 tests (audio engine, theory, lessons, songs, lyrics, Spotify, stats…)
+cargo clippy --all-targets                   # lints
+cargo test --release -- --ignored --nocapture cost   # Jam mode's CPU cost, in release
+cd analyzer && ./setup.sh --dev && .venv/bin/python -m pytest   # the analyzer (the ML models are faked)
+```
+
+Most logic lives outside the UI (`learn/`, `song/`, `spotify/`, `stats.rs`, the audio thread), so it's covered by those tests; the screens were checked under Xvfb. Things that need real hardware (how Bluetooth sync feels, the real Spotify login, live listen on a real microphone) are listed in PLAN.md.

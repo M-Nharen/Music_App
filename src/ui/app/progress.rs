@@ -58,10 +58,7 @@ impl QwertoneApp {
         let goal_s = self.cfg.practice.goal_minutes as f64 * 60.0;
         let week = today.week_start();
         let this_week = self.stats.stats.total_between(week, today);
-        let last_week = self
-            .stats
-            .stats
-            .total_between(week.plus(-7), week.plus(-1));
+        let last_week = self.stats.stats.total_between(week.plus(-7), week.plus(-1));
         let totals = self.stats.stats.totals();
         let days = self.stats.stats.days_practised();
 
@@ -241,7 +238,11 @@ impl QwertoneApp {
                     egui::pos2(cx - bw / 2.0, top),
                     egui::pos2(cx + bw / 2.0, plot.bottom()),
                 );
-                let color = if *d > today { p.outline_variant } else { p.primary };
+                let color = if *d > today {
+                    p.outline_variant
+                } else {
+                    p.primary
+                };
                 painter.rect_filled(
                     bar,
                     egui::CornerRadius {
@@ -305,7 +306,10 @@ impl QwertoneApp {
         let painter = ui.painter_at(rect);
         for (row, name) in [(0, "Mon"), (2, "Wed"), (4, "Fri"), (6, "Sun")] {
             painter.text(
-                egui::pos2(rect.left(), rect.top() + top + row as f32 * (cell + gap) + cell / 2.0),
+                egui::pos2(
+                    rect.left(),
+                    rect.top() + top + row as f32 * (cell + gap) + cell / 2.0,
+                ),
                 egui::Align2::LEFT_CENTER,
                 name,
                 egui::FontId::proportional(11.0),
@@ -362,8 +366,12 @@ impl QwertoneApp {
                         egui::StrokeKind::Outside,
                     );
                 }
-                ui.interact(r.expand(gap / 2.0), ui.scope_id().with(("cal", d.0)), egui::Sense::hover())
-                    .on_hover_text(day_tooltip(d, &s));
+                ui.interact(
+                    r.expand(gap / 2.0),
+                    ui.scope_id().with(("cal", d.0)),
+                    egui::Sense::hover(),
+                )
+                .on_hover_text(day_tooltip(d, &s));
             }
         }
         ui.horizontal(|ui| {
@@ -376,7 +384,11 @@ impl QwertoneApp {
                     mix(p.surface_container_high, p.primary, step),
                 );
             }
-            ui.label(RichText::new("More (the strongest colour = twice your daily goal or more)").small().color(p.on_surface_variant));
+            ui.label(
+                RichText::new("More (the strongest colour = twice your daily goal or more)")
+                    .small()
+                    .color(p.on_surface_variant),
+            );
         });
     }
 
@@ -403,7 +415,11 @@ impl QwertoneApp {
                 }
                 ui.end_row();
                 for r in songs.iter().take(12) {
-                    ui.label(if r.title.is_empty() { "(untitled)" } else { &r.title });
+                    ui.label(if r.title.is_empty() {
+                        "(untitled)"
+                    } else {
+                        &r.title
+                    });
                     ui.label(r.plays.to_string());
                     ui.label(format!("{}%", r.best));
                     let when = Day::parse(&r.last_day)
