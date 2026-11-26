@@ -55,6 +55,8 @@ pub(super) struct SpotifyUi {
     /// Where Spotify is (estimated between polls).
     est: Option<Estimate>,
     pb: Option<Playback>,
+    /// When the last playback answer came.
+    last_sample: Option<Instant>,
     /// Calls are paused (429 / quota / offline) until then.
     paused: Option<(Instant, Why)>,
     note: Option<(String, Instant)>,
@@ -100,6 +102,7 @@ impl SpotifyUi {
             poller: Poller::new(cfg.poll_secs),
             est: None,
             pb: None,
+            last_sample: None,
             paused: None,
             note: None,
             calls: 0,
@@ -306,6 +309,7 @@ impl QwertoneApp {
             }
             Ev::Playback { pb, sent, received } => {
                 self.spotify.paused = self.sp_paused();
+                self.spotify.last_sample = Some(received);
                 let old_id = self.spotify.est.as_ref().and_then(|e| e.track_id.clone());
                 match &pb {
                     Some(p) => {
@@ -657,6 +661,11 @@ impl QwertoneApp {
             track_id: track_id(t),
             track_name: t.name.clone(),
         });
+        // Spotify plays the original key: an easy part in another key
+        // wouldn't match it.
+        if self.song_prefer_original_key() {
+            self.notify("Following Spotify: switched to the part in the original key, so it matches the recording.");
+        }
         // Wait mode etc. depend on it: new targets.
         self.song_rebuild(false);
         self.song_ui.view = song::SongView::Practice;
@@ -1129,7 +1138,7 @@ impl QwertoneApp {
                 p.tertiary,
             ));
         }
-        if self.cfg.song.line_up && self.output_delay_ms() > 1.0 {
+        if self.cfg.song.line_up && self.output_delay_ms() > 40.0 {
             notes.push((
                 format!(
                     "The notes run {:.0} ms ahead of what you hear (Spotify plays through the same delay), so press on the line.",
@@ -1264,11 +1273,9 @@ impl QwertoneApp {
                 });
             }
             ui.label(
-                RichText::new(
-                    "Full guide with pictures-in-words: docs/SPOTIFY_SETUP.md in the app's folder.",
-                )
-                .small()
-                .color(p.outline),
+                RichText::new("Step-by-step guide: docs/SPOTIFY_SETUP.md in the app's folder.")
+                    .small()
+                    .color(p.outline),
             );
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -1338,7 +1345,7 @@ impl QwertoneApp {
         let est = self.spotify.est.clone();
         card(ui, &p, "Now playing", |ui| {
             let Some(pb) = pb else {
-                ui.label(if self.spotify.poller.last().is_none() {
+                ui.label(if self.spotify.last_sample.is_none() {
                     "Asking Spotify…"
                 } else {
                     "Nothing is playing. Start something in Spotify, or search on the right."
@@ -1461,7 +1468,7 @@ impl QwertoneApp {
                     }
                 }
             });
-            if let Some(age) = self.spotify.poller.last().map(|l| l.elapsed()) {
+            if let Some(age) = self.spotify.last_sample.map(|l| l.elapsed()) {
                 ui.label(
                     RichText::new(format!(
                         "Checked with Spotify {} ago; the position in between is estimated.",

@@ -23,9 +23,9 @@ use std::time::{Duration, Instant};
 /// Rolling window, like Spotify's.
 pub const WINDOW: Duration = Duration::from_secs(30);
 /// Our own ceiling per window (far below what gets a 429 in practice).
-pub const WINDOW_MAX: usize = 12;
+pub const WINDOW_MAX: usize = 16;
 /// Calls in each window that only user actions may use.
-pub const RESERVED: usize = 4;
+pub const RESERVED: usize = 5;
 /// First pause after a 429 without `Retry-After`.
 pub const DEFAULT_429: Duration = Duration::from_secs(60);
 /// Pause when the quota is used up and Spotify doesn't say for how long.

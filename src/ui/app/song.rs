@@ -311,6 +311,49 @@ impl QwertoneApp {
         (pos, c.playing)
     }
 
+    /// Sync mode: an easy part moved to an easier key wouldn't match
+    /// Spotify, so play the same part in the original key instead (if the
+    /// song has it). Returns true if something changed.
+    pub(super) fn song_prefer_original_key(&mut self) -> bool {
+        let Some(song) = &self.song_ui.song else {
+            return false;
+        };
+        let mut changed = false;
+        let mut parts = self.song_ui.play_parts.clone();
+        for i in parts.iter_mut() {
+            let p = &song.parts[*i];
+            if p.transpose == 0 {
+                continue;
+            }
+            let base = p.id.trim_end_matches("-easy");
+            let alt = song
+                .parts
+                .iter()
+                .position(|q| q.transpose == 0 && q.id == base && !q.notes.is_empty())
+                .or_else(|| {
+                    song.parts
+                        .iter()
+                        .position(|q| q.transpose == 0 && q.role == p.role && !q.notes.is_empty())
+                });
+            if let Some(a) = alt {
+                *i = a;
+                changed = true;
+            }
+        }
+        if changed {
+            parts.dedup();
+            self.song_ui.play_parts = parts;
+            self.song_ui.jam.parts_changed();
+            self.song_default_hear();
+            self.song_rebuild(true);
+            self.song_send_data();
+            if self.cfg.song.song_layout {
+                self.song_apply_layout();
+            }
+        }
+        changed
+    }
+
     pub(super) fn song_clear_ended(&mut self) {
         self.song_ui.clock.ended = false;
     }
@@ -2038,7 +2081,12 @@ impl QwertoneApp {
                 }
             ));
         }
-        if self.song_transpose() != 0 && !self.jam_active() {
+        if self.song_transpose() != 0 && self.syncing() {
+            notes.push(format!(
+                "This easy part is in an easier key ({:+} semitones), so it won't match Spotify. Pick the normal part in “I play” to play along.",
+                self.song_transpose()
+            ));
+        } else if self.song_transpose() != 0 && !self.jam_active() {
             notes.push(format!(
                 "This easy part is in an easier key ({:+} semitones), so the backing is moved too and won't match the original recording.",
                 self.song_transpose()

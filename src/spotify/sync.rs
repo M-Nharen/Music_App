@@ -190,12 +190,6 @@ impl Poller {
             _ => at,
         });
     }
-
-    /// Became visible again after a while: a poll is due if the last one is
-    /// older than a gap (that's just `due`), nothing else to do.
-    pub fn last(&self) -> Option<Instant> {
-        self.last
-    }
 }
 
 #[cfg(test)]

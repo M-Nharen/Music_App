@@ -98,7 +98,9 @@ pub struct Client {
 
 impl Client {
     pub fn start(store_pref: String, repaint: impl Fn() + Send + 'static) -> Client {
-        Client::start_with(api::API.to_string(), store_pref, repaint)
+        // QWERTONE_SPOTIFY_API: a fake Web API for testing the UI.
+        let base = std::env::var("QWERTONE_SPOTIFY_API").unwrap_or_else(|_| api::API.to_string());
+        Client::start_with(base, store_pref, repaint)
     }
 
     /// With another API address (tests use a fake server).
