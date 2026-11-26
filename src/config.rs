@@ -112,6 +112,52 @@ pub struct Config {
 
     // ---- Jam mode (Part 7).
     pub jam: JamSettings,
+
+    // ---- Lyrics (Part 10b).
+    pub lyrics: LyricsSettings,
+}
+
+/// Lyrics on the Lyrics screen and in the falling notes.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct LyricsSettings {
+    /// Show the original script (Tamil, Telugu, Devanagari …).
+    pub native: bool,
+    /// Show it in English letters (Tanglish, Tenglish, Hinglish …).
+    pub romanized: bool,
+    /// Show the English machine translation.
+    pub english: bool,
+    /// The current line inside the falling notes.
+    pub overlay: bool,
+    /// …at the top of the falling notes (false = just above the hit line).
+    pub overlay_top: bool,
+    /// …with the next line under it, smaller.
+    pub overlay_next: bool,
+    /// Lyrics nudge in ms (+ = lyrics earlier), on top of the Bluetooth
+    /// delay compensation.
+    pub offset_ms: f32,
+    /// Follow what you hear instead of the falling notes. Only differs with
+    /// "line up" on (the notes then run ahead of the sound by the output
+    /// delay; singers usually want the lyrics with the voice they hear).
+    pub follow_heard: bool,
+    /// Text size on the Lyrics screen (1 = normal).
+    pub size: f32,
+}
+
+impl Default for LyricsSettings {
+    fn default() -> Self {
+        Self {
+            native: true,
+            romanized: true,
+            english: false,
+            overlay: true,
+            overlay_top: true,
+            overlay_next: true,
+            offset_ms: 0.0,
+            follow_heard: true,
+            size: 1.0,
+        }
+    }
 }
 
 /// Jam mode: the analyzer's stems as the backing track.
@@ -264,6 +310,7 @@ impl Default for Config {
             midi_out_song: false,
             midi_out_local: true,
             jam: JamSettings::default(),
+            lyrics: LyricsSettings::default(),
         }
     }
 }

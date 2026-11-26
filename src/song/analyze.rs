@@ -22,6 +22,12 @@ pub enum Event {
         skipped: bool,
     },
     Error(String),
+    /// The lyrics step finished (`status`: synced | plain | instrumental |
+    /// not_found).
+    Lyrics {
+        status: String,
+        language: Option<String>,
+    },
     /// A line that wasn't JSON (warnings from libraries).
     Log(String),
     /// The process ended (exit code, None if killed).
@@ -45,6 +51,10 @@ pub fn parse_line(line: &str) -> Event {
             skipped: v.get("skipped").and_then(|x| x.as_bool()).unwrap_or(false),
         },
         Some("error") => Event::Error(s("message")),
+        Some("lyrics") => Event::Lyrics {
+            status: s("status"),
+            language: v.get("language").and_then(|x| x.as_str()).map(|x| x.to_string()),
+        },
         _ => Event::Log(line.to_string()),
     }
 }
@@ -204,13 +214,53 @@ pub struct Job {
     pub message: String,
     pub log: Vec<String>,
     pub result: Option<Result<PathBuf, String>>,
+    /// Lyrics jobs: a clean exit means done (no "done" event), with this folder.
+    ok_on_exit: Option<PathBuf>,
+    /// What the lyrics step found.
+    pub lyrics_status: Option<String>,
 }
 
 impl Job {
     /// Start `qwertone-analyze` on a file.
     pub fn start(program: &Path, file: &Path, opts: Options) -> Result<Job, String> {
+        let midi = super::library::is_midi(file);
+        let expected = expected_stages(&opts, midi);
+        Job::spawn(program, opts.args(file), file, opts, expected, None)
+    }
+
+    /// `qwertone-analyze lyrics <song dir> --json-progress [extra…]`: find
+    /// (or rebuild) the lyrics of an analysed song.
+    pub fn lyrics(program: &Path, song_dir: &Path, extra: &[&str]) -> Result<Job, String> {
+        let mut args = vec![
+            "lyrics".to_string(),
+            song_dir.display().to_string(),
+            "--json-progress".into(),
+        ];
+        args.extend(extra.iter().map(|s| s.to_string()));
+        Job::spawn(program, args, song_dir, Options::default(), vec!["lyrics"], Some(song_dir.to_path_buf()))
+    }
+
+    /// `qwertone-analyze import-lrc <file> <song dir> --json-progress`.
+    pub fn import_lrc(program: &Path, lrc: &Path, song_dir: &Path) -> Result<Job, String> {
+        let args = vec![
+            "import-lrc".to_string(),
+            lrc.display().to_string(),
+            song_dir.display().to_string(),
+            "--json-progress".into(),
+        ];
+        Job::spawn(program, args, song_dir, Options::default(), vec!["lyrics"], Some(song_dir.to_path_buf()))
+    }
+
+    fn spawn(
+        program: &Path,
+        args: Vec<String>,
+        file: &Path,
+        opts: Options,
+        expected: Vec<&'static str>,
+        ok_on_exit: Option<PathBuf>,
+    ) -> Result<Job, String> {
         let mut child = Command::new(program)
-            .args(opts.args(file))
+            .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -227,9 +277,8 @@ impl Job {
         });
         let waiter = child.clone();
         std::thread::spawn(move || read_events(stderr, tx, waiter));
-        let midi = super::library::is_midi(file);
         Ok(Job {
-            expected: expected_stages(&opts, midi),
+            expected,
             file: file.to_path_buf(),
             opts,
             started: Instant::now(),
@@ -240,6 +289,8 @@ impl Job {
             message: "starting…".into(),
             log: Vec::new(),
             result: None,
+            ok_on_exit,
+            lyrics_status: None,
         })
     }
 
@@ -269,6 +320,9 @@ impl Job {
                 Event::Error(m) => {
                     self.result.get_or_insert(Err(m));
                 }
+                Event::Lyrics { status, .. } => {
+                    self.lyrics_status = Some(status);
+                }
                 Event::Log(l) => {
                     if !l.is_empty() {
                         self.log.push(l);
@@ -278,6 +332,12 @@ impl Job {
                     }
                 }
                 Event::Exit(code) => {
+                    if self.result.is_none()
+                        && code == Some(0)
+                        && let Some(d) = &self.ok_on_exit
+                    {
+                        self.result = Some(Ok(d.clone()));
+                    }
                     if self.result.is_none() {
                         let last = self
                             .log
@@ -381,6 +441,13 @@ mod tests {
             Event::Error("ffmpeg missing".into())
         );
         assert_eq!(
+            parse_line(r#"{"event": "lyrics", "status": "synced", "lines": 3, "language": "te"}"#),
+            Event::Lyrics {
+                status: "synced".into(),
+                language: Some("te".into())
+            }
+        );
+        assert_eq!(
             parse_line("UserWarning: x"),
             Event::Log("UserWarning: x".into())
         );
@@ -480,6 +547,26 @@ mod tests {
             err.contains("exit code 3") && err.contains("no ffmpeg"),
             "{err}"
         );
+
+        // The lyrics command: no "done" event, a clean exit is success.
+        std::fs::write(
+            &script,
+            "#!/bin/sh\n\
+             [ \"$1\" = lyrics ] || exit 9\n\
+             [ \"$4\" = --force ] || exit 8\n\
+             echo '{\"event\": \"stage\", \"stage\": \"lyrics\", \"message\": \"transcribing 60 / 240 s\"}' >&2\n\
+             echo '{\"event\": \"lyrics\", \"status\": \"not_found\", \"lines\": 0, \"language\": null}' >&2\n",
+        )
+        .unwrap();
+        let mut job = Job::lyrics(&script, Path::new("/songs/x"), &["--force"]).unwrap();
+        let t = Instant::now();
+        while job.running() && t.elapsed().as_secs() < 5 {
+            job.poll();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(job.result, Some(Ok(PathBuf::from("/songs/x"))));
+        assert_eq!(job.lyrics_status.as_deref(), Some("not_found"));
+        assert_eq!(job.message, "transcribing 60 / 240 s");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

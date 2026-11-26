@@ -222,25 +222,66 @@ pub fn apply(ctx: &egui::Context, p: &Palette) {
     });
 }
 
-/// Use end4's UI font if it's installed (Google Sans Flex / Rubik / Gabarito).
-pub fn install_fonts(ctx: &egui::Context) {
+/// `fc-match` a family; the font file, only if it really is that family
+/// (fc-match always returns *something*).
+fn fc_find(family: &str) -> Option<PathBuf> {
+    let out = std::process::Command::new("fc-match")
+        .args(["-f", "%{family}|%{file}", family])
+        .output()
+        .ok()?;
+    let s = String::from_utf8_lossy(&out.stdout);
+    let (fam, file) = s.split_once('|')?;
+    fam.to_lowercase()
+        .contains(&family.to_lowercase())
+        .then(|| PathBuf::from(file.trim()))
+}
+
+/// Scripts the lyrics can be in (Part 10b), as fallback fonts after the UI
+/// font: (family, file name in Arch's `noto-fonts` / Debian's
+/// `fonts-noto-core`). egui shapes them with harfrust, so conjuncts and
+/// vowel signs come out right.
+pub const SCRIPT_FONTS: [(&str, &str); 9] = [
+    ("Noto Sans Tamil", "NotoSansTamil-Regular.ttf"),
+    ("Noto Sans Telugu", "NotoSansTelugu-Regular.ttf"),
+    ("Noto Sans Devanagari", "NotoSansDevanagari-Regular.ttf"),
+    ("Noto Sans Kannada", "NotoSansKannada-Regular.ttf"),
+    ("Noto Sans Malayalam", "NotoSansMalayalam-Regular.ttf"),
+    ("Noto Sans Bengali", "NotoSansBengali-Regular.ttf"),
+    ("Noto Sans Gujarati", "NotoSansGujarati-Regular.ttf"),
+    ("Noto Sans Gurmukhi", "NotoSansGurmukhi-Regular.ttf"),
+    ("Noto Sans Oriya", "NotoSansOriya-Regular.ttf"),
+];
+
+/// Where a script font is: fontconfig first, then the usual folders.
+pub fn find_script_font(family: &str, file: &str) -> Option<PathBuf> {
+    if let Some(p) = fc_find(family) {
+        return Some(p);
+    }
+    let mut dirs = vec![
+        PathBuf::from("/usr/share/fonts/noto"),
+        PathBuf::from("/usr/share/fonts/truetype/noto"),
+        PathBuf::from("/usr/share/fonts/google-noto"),
+        PathBuf::from("/usr/share/fonts/TTF"),
+    ];
+    if let Some(d) = dirs::data_dir() {
+        dirs.push(d.join("fonts"));
+    }
+    if let Some(h) = dirs::home_dir() {
+        dirs.push(h.join(".fonts"));
+    }
+    dirs.into_iter().map(|d| d.join(file)).find(|p| p.is_file())
+}
+
+/// Use end4's UI font if it's installed (Google Sans Flex / Rubik /
+/// Gabarito), plus Noto Sans Tamil / Telugu / Devanagari & co as
+/// fallbacks for lyrics. Returns the script fonts that are missing.
+pub fn install_fonts(ctx: &egui::Context) -> Vec<&'static str> {
     let mut fonts = FontDefinitions::default();
     for family in ["Google Sans Flex", "Rubik", "Gabarito"] {
-        let Ok(out) = std::process::Command::new("fc-match")
-            .args(["-f", "%{family}|%{file}", family])
-            .output()
-        else {
-            break;
-        };
-        let s = String::from_utf8_lossy(&out.stdout);
-        let Some((fam, file)) = s.split_once('|') else {
+        let Some(file) = fc_find(family) else {
             continue;
         };
-        // fc-match always returns *something*; only use it if it's really that font.
-        if !fam.to_lowercase().contains(&family.to_lowercase()) {
-            continue;
-        }
-        if let Ok(bytes) = std::fs::read(file.trim()) {
+        if let Ok(bytes) = std::fs::read(&file) {
             fonts
                 .font_data
                 .insert(family.into(), Arc::new(FontData::from_owned(bytes)));
@@ -252,7 +293,22 @@ pub fn install_fonts(ctx: &egui::Context) {
             break;
         }
     }
+    let mut missing = Vec::new();
+    for (family, file) in SCRIPT_FONTS {
+        let bytes = find_script_font(family, file).and_then(|p| std::fs::read(p).ok());
+        let Some(bytes) = bytes else {
+            missing.push(family);
+            continue;
+        };
+        fonts
+            .font_data
+            .insert(family.into(), Arc::new(FontData::from_owned(bytes)));
+        for fam in [FontFamily::Proportional, FontFamily::Monospace] {
+            fonts.families.entry(fam).or_default().push(family.into());
+        }
+    }
     ctx.set_fonts(fonts);
+    missing
 }
 
 #[cfg(test)]

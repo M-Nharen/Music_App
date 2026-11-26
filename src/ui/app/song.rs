@@ -19,7 +19,9 @@ use crate::ui::widgets::{Hint, HintKind};
 use egui::vec2;
 
 mod jam;
+mod lyrics;
 use jam::JamUi;
+use lyrics::LyricsUi;
 
 /// Channels for the song's parts (0–2 are yours, 9 is drums).
 const SONG_CHANNELS: [u8; 12] = [3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
@@ -31,6 +33,10 @@ pub(super) enum SongView {
     Library,
     Practice,
     Edit,
+    /// The Spotify-style lyrics screen (Part 10b).
+    Lyrics,
+    /// The lyrics editor / tap-along.
+    LyricsEdit,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -102,6 +108,8 @@ pub(super) struct SongUi {
     pub was_tab: bool,
     // Jam mode (Part 7).
     jam: JamUi,
+    // Lyrics (Part 10b).
+    lyrics: LyricsUi,
 }
 
 impl SongUi {
@@ -156,6 +164,7 @@ impl SongUi {
             confirm_leave: false,
             was_tab: false,
             jam: JamUi::new(),
+            lyrics: LyricsUi::new(),
         }
     }
 }
@@ -297,6 +306,7 @@ impl QwertoneApp {
         if self.cfg.song.song_layout {
             self.song_apply_layout();
         }
+        self.lyrics_load();
     }
 
     /// Which parts you hear by default: not the ones you play, and not
@@ -949,6 +959,7 @@ impl QwertoneApp {
         }
 
         busy |= self.jam_poll(ctx);
+        busy |= self.lyrics_poll(ctx);
         if self.song_ui.song.is_none() {
             return busy;
         }
@@ -1012,8 +1023,10 @@ impl QwertoneApp {
                     self.song_ui.flash = Some((false, Instant::now()));
                 }
             }
-            // Wait mode: stop the audio at the next notes.
-            let wp = p.wait_point();
+            // Wait mode: stop the audio at the next notes (not on the
+            // lyrics screens: there you listen / tap along).
+            let listening = matches!(self.song_ui.view, SongView::Lyrics | SongView::LyricsEdit);
+            let wp = if listening { None } else { p.wait_point() };
             let same = match (wp, self.song_ui.sent_wait) {
                 (Some(a), Some(b)) => (a - b).abs() < 1e-9,
                 (None, None) => true,
@@ -1219,6 +1232,9 @@ impl QwertoneApp {
         if self.song_ui.view == SongView::Edit {
             return self.editor_key(k, repeat, mods);
         }
+        if self.song_ui.view == SongView::LyricsEdit {
+            return self.lyrics_editor_key(k, repeat, mods);
+        }
         // One-key mode: any playing key (not controls) plays the next notes.
         let control = bound.is_some_and(|a| a.kind() == crate::keymap::ActionKind::Control);
         let modifier = matches!(k, KeyId::Shift | KeyId::Ctrl | KeyId::Alt);
@@ -1343,6 +1359,8 @@ impl QwertoneApp {
             SongView::Library => self.song_library(ui),
             SongView::Practice if self.song_ui.song.is_some() => self.song_practice(ui),
             SongView::Edit if self.song_ui.song.is_some() => self.song_editor(ui),
+            SongView::Lyrics if self.song_ui.song.is_some() => self.lyrics_screen(ui),
+            SongView::LyricsEdit if self.song_ui.song.is_some() => self.lyrics_editor(ui),
             _ => {
                 self.song_ui.view = SongView::Library;
                 self.song_library(ui)
@@ -1837,6 +1855,14 @@ impl QwertoneApp {
             if ui.button("✎ Edit notes").clicked() {
                 self.editor_open(None);
             }
+            let has_lyrics = self.song_ui.lyrics.doc.as_ref().is_some_and(|d| !d.lines.is_empty());
+            if ui
+                .button(if has_lyrics { "♪ Lyrics" } else { "♪ Lyrics…" })
+                .on_hover_text("The words, big, following the song (sing along, tap to jump)")
+                .clicked()
+            {
+                self.song_ui.view = SongView::Lyrics;
+            }
         });
         if rebuild {
             self.song_ui.jam.parts_changed();
@@ -2043,6 +2069,9 @@ impl QwertoneApp {
         egui::CollapsingHeader::new("Sound & sync")
             .id_salt("song-sound")
             .show(ui, |ui| self.song_sound(ui));
+        egui::CollapsingHeader::new("Lyrics")
+            .id_salt("song-lyrics")
+            .show(ui, |ui| self.lyrics_card(ui));
     }
 
     fn song_sound(&mut self, ui: &mut egui::Ui) {
@@ -2292,7 +2321,10 @@ impl QwertoneApp {
             flash,
         };
         let top = ui.cursor().min;
+        let area = egui::Rect::from_min_size(top, vec2(ui.available_width(), height));
         let clicked = view.show(ui, &p);
+        // The current lyric line inside the falling notes (Part 10b).
+        let lyric_h = self.lyrics_overlay(ui, area);
         if let Some(b) = clicked
             && !self.song_playing()
         {
@@ -2318,7 +2350,7 @@ impl QwertoneApp {
                 Judgement::Miss => ("Missed".to_string(), p.error),
             };
             let galley = painter.layout_no_wrap(text, egui::FontId::proportional(18.0), c);
-            let pos = top + vec2(ui.available_width() * 0.5 - galley.size().x / 2.0, 14.0);
+            let pos = top + vec2(ui.available_width() * 0.5 - galley.size().x / 2.0, 14.0 + lyric_h);
             let bg =
                 egui::Rect::from_min_size(pos - vec2(12.0, 5.0), galley.size() + vec2(24.0, 10.0));
             painter.rect_filled(

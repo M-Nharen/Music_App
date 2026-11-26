@@ -177,6 +177,15 @@ def imported_candidate(song_dir: Path) -> Candidate | None:
             meta = json.load(f)
     except (OSError, json.JSONDecodeError):
         pass
+    if meta.get("editor") == "qwertone":
+        # Saved by the app's lyrics editor (Part 10b): a user edit, based on
+        # whatever the lyrics came from before.
+        c = _file_candidate(p, "user", "edited in Qwertone", fetched=meta.get("imported"))
+        if c is not None:
+            c.source["file"] = f"{IMPORT_DIR}/{IMPORT_LRC}"
+            if meta.get("based_on"):
+                c.source["based_on"] = meta["based_on"]
+        return c
     return _file_candidate(p, "file", "imported .lrc", fetched=meta.get("imported"),
                            original=meta.get("original") or str(p))
 

@@ -368,6 +368,29 @@ def test_import_lrc_command_wins_over_sidecar(tmp_path, capsys):
     configure(quiet=True)
 
 
+def test_app_editor_save_is_a_user_source(tmp_path):
+    """The app's lyrics editor (Part 10b) saves lyrics/imported.lrc + imported.json
+    with "editor": "qwertone"; the analyzer keeps it and calls it a user edit."""
+    d = make_song(tmp_path)
+    (d / "lyrics").mkdir()
+    (d / "lyrics" / "imported.lrc").write_text(
+        "[la:ta]\n[re:qwertone]\n[00:01.00]<00:01.00>காலை <00:01.50>தென்றல் <00:02.00>\n[00:03.00]nee enakku\n")
+    based = {"kind": "lrclib", "name": "LRCLIB", "url": "https://lrclib.net/api/get/1", "file": None,
+             "fetched": "2026-11-26T10:00:00+00:00"}
+    (d / "lyrics" / "imported.json").write_text(json.dumps(
+        {"original": "edited in Qwertone", "imported": "2026-11-26T11:00:00+00:00", "editor": "qwertone",
+         "based_on": {"words": based, "timing": based}}))
+    lyrics.run_lyrics(d, opts(tmp_path, online=False))
+    doc = read(d)
+    validate(doc)
+    src = doc["sources"]["words"]
+    assert src["kind"] == "user" and src["name"] == "edited in Qwertone"
+    assert src["file"] == "lyrics/imported.lrc" and src["based_on"]["words"]["name"] == "LRCLIB"
+    assert src["fetched"] == "2026-11-26T11:00:00+00:00"
+    assert doc["status"] == "synced" and doc["lines"][0]["words"][1]["start"] == 1.5
+    assert doc["lines"][0]["romanized"] == "kaalai thendral"
+
+
 def test_lyrics_command_errors(tmp_path, capsys):
     assert cli.main(["lyrics", str(tmp_path / "nope"), "-q"]) == 2
     stray = tmp_path / "x.mp3"

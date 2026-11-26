@@ -19,6 +19,7 @@ pub mod edit;
 pub mod jam;
 pub mod layout;
 pub mod library;
+pub mod lyrics;
 pub mod midi;
 pub mod practice;
 

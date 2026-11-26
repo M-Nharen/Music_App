@@ -140,7 +140,7 @@ pub struct QwertoneApp {
 impl QwertoneApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let ctx = &cc.egui_ctx;
-        theme::install_fonts(ctx);
+        let missing_fonts = theme::install_fonts(ctx);
         let (cfg, cfg_err) = Config::load();
         let (palette, theme_file) = if cfg.follow_system_theme {
             match theme::load_system_palette() {
@@ -211,6 +211,7 @@ impl QwertoneApp {
             last_poll: Instant::now(),
         };
         app.learn = learn::LearnUi::new(&app.cfg.learn);
+        app.set_missing_fonts(missing_fonts);
         if let Some(e) = cfg_err {
             app.notify(e);
         }
