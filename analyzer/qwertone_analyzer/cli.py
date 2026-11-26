@@ -62,7 +62,17 @@ def _analyze_parser(sub) -> argparse.ArgumentParser:
     g = p.add_argument_group("lyrics")
     g.add_argument("--no-lyrics", dest="lyrics", action="store_false", help="skip the lyrics step")
     g.add_argument("--offline", dest="lyrics_online", action="store_false",
-                   help="don't ask LRCLIB (local .lrc and tags only)")
+                   help="don't go online: no LRCLIB / AcoustID, models only if already downloaded")
+    g.add_argument("--light", dest="lyrics_models", action="store_false",
+                   help="lyrics without models: no Whisper transcription/alignment, no translation")
+    g.add_argument("--lyrics-language", help="the song's language if detection gets it wrong: ta, te, hi, en, "
+                                             "ta-Latn (Tanglish) ... (default: Whisper / the lyrics decide)")
+    g.add_argument("--whisper-model", default="auto",
+                   help="auto (= large-v3-turbo) | small | medium | large-v3 ... (smaller = faster, rougher)")
+    g.add_argument("--no-translate", dest="translate", action="store_false", help="no English translation")
+    g.add_argument("--acoustid", default="auto", choices=("auto", "always", "never"),
+                   help="identify the song by its sound: auto = only files without title/artist tags")
+    g.add_argument("--acoustid-key", help="AcoustID API key (or ACOUSTID_API_KEY, or ~/.config/qwertone/acoustid_key)")
 
     g = p.add_argument_group("output")
     g.add_argument("-q", "--quiet", action="store_true")
@@ -71,16 +81,27 @@ def _analyze_parser(sub) -> argparse.ArgumentParser:
 
 
 def _lyrics_common(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--offline", action="store_true", help="don't ask LRCLIB (cached answers are still used)")
-    p.add_argument("--refresh", action="store_true", help="ask LRCLIB again instead of using its cached answer")
-    p.add_argument("--language", help="song language if the guess is wrong: ta, en, ta-Latn (Tanglish) ...")
+    p.add_argument("--offline", action="store_true",
+                   help="don't go online: no LRCLIB / AcoustID / model downloads (cached answers are still used)")
+    p.add_argument("--refresh", action="store_true", help="ask LRCLIB / AcoustID again instead of using cached answers")
+    p.add_argument("--language", help="the song's language if detection gets it wrong (also tells Whisper): "
+                                      "ta, te, hi, en, ta-Latn (Tanglish), hi-Latn (Hinglish) ...")
+    p.add_argument("--light", action="store_true",
+                   help="no models: skip Whisper transcription / alignment and translation")
+    p.add_argument("--whisper-model", default="auto",
+                   help="auto (= large-v3-turbo) | small | medium | large-v3 ... (smaller = faster, rougher)")
+    p.add_argument("--device", default="auto", help="auto | cpu | cuda (Whisper and the translator)")
+    p.add_argument("--no-translate", dest="translate", action="store_false", help="no English translation")
+    p.add_argument("--acoustid", default="auto", choices=("auto", "always", "never"),
+                   help="identify the song by its sound: auto = only files without title/artist tags")
+    p.add_argument("--acoustid-key", help="AcoustID API key (or ACOUSTID_API_KEY, or ~/.config/qwertone/acoustid_key)")
     p.add_argument("--title", help="look up this title instead of the one in song.json")
     p.add_argument("--artist")
     p.add_argument("--album")
     p.add_argument("-o", "--out", dest="out_dir", help="where song folders are (to find SONG by its audio file)")
     p.add_argument("--cache-dir", help=f"default {default_cache_root()}")
     p.add_argument("--no-cache", dest="use_cache", action="store_false")
-    p.add_argument("--show", action="store_true", help="print the lines (with Tanglish) afterwards")
+    p.add_argument("--show", action="store_true", help="print the lines (romanised + English) afterwards")
     p.add_argument("-q", "--quiet", action="store_true")
     p.add_argument("--json-progress", action="store_true")
 
@@ -117,11 +138,14 @@ def main(argv: list[str] | None = None) -> int:
     dm = sub.add_parser("download-models", help="fetch model weights now instead of on first use")
     dm.add_argument("--six-stems", action="store_true", help="also htdemucs_6s (piano/guitar stems)")
     dm.add_argument("--no-piano", action="store_true")
+    dm.add_argument("--no-whisper", action="store_true", help="skip the Whisper lyrics model")
+    dm.add_argument("--whisper-model", default="auto", help="which Whisper model (default large-v3-turbo)")
+    dm.add_argument("--no-translate", action="store_true", help="skip the translation model")
     args = ap.parse_args(argv)
 
     if args.cmd == "doctor":
         for k, v in backends.status().items():
-            print(f"{k:<22} {v}")
+            print(f"{k:<25} {v}")
         return 0
 
     if args.cmd == "cache":
@@ -162,7 +186,9 @@ def _lyrics_cmd(args) -> int:
     def options(force: bool = False) -> "lyrics.LyricsOptions":
         return lyrics.LyricsOptions(online=not args.offline, refresh=args.refresh, force=force,
                                     language=args.language, title=args.title, artist=args.artist,
-                                    album=args.album, cache_dir=args.cache_dir, use_cache=args.use_cache)
+                                    album=args.album, cache_dir=args.cache_dir, use_cache=args.use_cache,
+                                    models=not args.light, whisper_model=args.whisper_model, device=args.device,
+                                    translate=args.translate, acoustid=args.acoustid, acoustid_key=args.acoustid_key)
     try:
         if args.cmd == "import-lrc":
             if not args.lrc.exists():
@@ -188,7 +214,8 @@ def _lyrics_cmd(args) -> int:
     for d, r in results:
         extra = f"  ({r.words_source} words" + (f", {r.timing_source} timing)" if r.timing_source else ")") \
             if r.words_source else ""
-        print(f"{r.path}  {r.status}, {r.lines} lines{extra}{'  [up to date]' if r.skipped else ''}")
+        lang = f", {r.language}" if r.language and r.lines else ""
+        print(f"{r.path}  {r.status}, {r.lines} lines{lang}{extra}{'  [up to date]' if r.skipped else ''}")
         for n in r.notes:
             print(f"  note: {n}")
         if args.show:
@@ -202,9 +229,16 @@ def _show_lyrics(path: Path) -> None:
         doc = json.load(f)
     for l in doc["lines"]:
         t = f"{l['start']:7.2f}" if l["start"] is not None else "      -"
-        print(f"  {t}  {l['text']}")
-        if l.get("tanglish") and l["tanglish"] != l["text"]:
-            print(f"           {l['tanglish']}")
+        print(f"  {t}  {l['text']}   [{l.get('language')}]")
+        if l.get("romanized") and l["romanized"] != l["text"]:
+            print(f"           {l['romanized']}")
+        if l.get("translation"):
+            print(f"           = {l['translation']}")
+    if any(l.get("translation") for l in doc["lines"]):
+        print(f"  (English: {doc['sources']['translation']['name']})")
+    if any((doc.get("auto_generated") or {}).values()):
+        gen = [k for k, v in doc["auto_generated"].items() if v]
+        print(f"  (auto-generated: {', '.join(gen)})")
 
 
 def _download(args) -> int:
@@ -220,6 +254,24 @@ def _download(args) -> int:
     if backends.has_piano_model() and not args.no_piano:
         print("piano transcription model ...", flush=True)
         backends.ensure_piano_checkpoint()
+    from . import asr, translate
+    if asr.available() and not args.no_whisper:
+        name = asr.model_name(args.whisper_model)
+        print(f"whisper {name} ...", flush=True)
+        try:
+            asr.load_model(name, "cpu")
+        except asr.AsrUnavailable as e:
+            print(f"  failed: {e}")
+    elif not args.no_whisper:
+        print("faster-whisper not installed, skipping")
+    if translate.available() and not args.no_translate:
+        print(f"translator {translate.model_label(translate.DEFAULT_MODEL)} ...", flush=True)
+        try:
+            translate.load(translate.DEFAULT_MODEL, "cpu")
+        except translate.TranslatorUnavailable as e:
+            print(f"  failed: {e}")
+    elif not args.no_translate:
+        print("ctranslate2/sentencepiece not installed, skipping the translator")
     print("CREPE and Basic Pitch weights ship inside their packages.")
     return 0
 

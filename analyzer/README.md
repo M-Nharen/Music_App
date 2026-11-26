@@ -99,28 +99,74 @@ what's new (stems are separated once per file). `--force` redoes everything;
 
 After writing the song folder the analyzer also makes `lyrics.json` (format in
 [SONG_FORMAT.md](SONG_FORMAT.md#lyricsjson)): line by line with times and
-beats, word timing when the source has it, the language of each line, and
-Tanglish under every Tamil line. It looks, in order, at an imported .lrc, an
-.lrc next to the audio (`Song.mp3` + `Song.lrc`), the file's own lyrics tags,
-and then [LRCLIB](https://lrclib.net) (free synced lyrics, looked up by
-title, artist and length). Where each part came from (file or URL, and the
-date) is stored for the words, the timing and the translation separately.
+beats, word timing when the source has it, the **language of the song and of
+every line**, a romanised form of every line in an Indian script, and an
+English machine translation of every line that isn't English.
+
+Where the lyrics come from, in order: an imported .lrc, an .lrc next to the
+audio (`Song.mp3` + `Song.lrc`), the file's own lyrics tags,
+[LRCLIB](https://lrclib.net) (free synced lyrics, looked up by title, artist
+and length), and finally **Whisper** listening to the vocal stem. Where each
+part came from (file or URL, and the date) is stored for the words, the
+timing and the translation separately, and anything a model made is marked
+`auto_generated`.
+
+- **No lyrics anywhere:** faster-whisper transcribes the vocal stem (the whole
+  mix if the song was analysed without stems). The words and timing are
+  marked auto-generated, with a confidence per line.
+- **Only plain lyrics (no timing):** they are aligned to the vocal stem: Whisper
+  transcribes it with word times and the lyric words are matched to what it
+  heard (sound-alike matching across scripts and spellings). Your words are
+  kept; only the timing is generated. If too little matches, they stay plain.
+- **Language:** Whisper detects it per song from the singing (Tamil, Telugu,
+  Hindi, …); if two languages are both likely (Hindi + English) it detects
+  every 30 s window on its own, and each line gets the language of its own
+  text. Sung Hindi is often detected as Urdu; that is written as Hindi
+  (Devanagari) unless you say `--language ur`. `--language` overrides it all.
+- **Romanised lines:** one library (Aksharamukha) for every Indian script:
+  Tanglish, Tenglish, Hinglish, and Kannada, Malayalam, Bengali, … too.
+- **English translation:** offline with NLLB-200 (any of ~200 languages to
+  English), one line at a time from its own language; labelled machine
+  translation. Romanised lines (Tanglish typed in Latin letters) aren't
+  translated.
+- **Untagged files:** AcoustID identifies the song from its sound so LRCLIB can
+  be asked (needs `fpcalc` from `chromaprint` and a free key from
+  <https://acoustid.org/new-application>: `--acoustid-key KEY`, or
+  `ACOUSTID_API_KEY`, or the file `~/.config/qwertone/acoustid_key`).
 
 ```bash
 qwertone-analyze lyrics ~/Music/song.mp3          # redo only the lyrics step (song folder or song.json works too)
 qwertone-analyze lyrics --all                      # every analysed song
-qwertone-analyze lyrics song.mp3 --show            # ...and print the lines with Tanglish
+qwertone-analyze lyrics song.mp3 --show            # ...and print the lines, romanised + English
+qwertone-analyze lyrics song.mp3 --language te     # it's a Telugu song (also tells Whisper)
+qwertone-analyze lyrics song.mp3 --language hi-Latn   # the lyrics are Hinglish in Latin letters
+qwertone-analyze lyrics song.mp3 --light           # no models: no Whisper, no translation
+qwertone-analyze lyrics song.mp3 --whisper-model small   # faster, rougher (default large-v3-turbo)
 qwertone-analyze lyrics song.mp3 --artist "Anirudh Ravichander" --title "Hukum"   # wrong tags
-qwertone-analyze lyrics song.mp3 --language ta-Latn   # the lyrics are already Tanglish
 qwertone-analyze import-lrc my-timing.lrc ~/Music/song.mp3   # your own .lrc wins from now on
+qwertone-analyze song.mp3 --lyrics-language ta --light       # the same options on analyze
 ```
 
-`--offline` never contacts LRCLIB (also on `analyze`; `QWERTONE_OFFLINE=1`
-does the same), `--no-lyrics` on `analyze` skips the step. LRCLIB answers are
-cached in the per-song cache; "not found" is asked again after 7 days or with
-`--refresh`. If `lyrics.json` is up to date the step does nothing; `--force`
-rebuilds it. To undo an import, delete `lyrics/` in the song folder and run
-`qwertone-analyze lyrics` again.
+Models download on first use into `~/.cache/qwertone/models/` (Whisper
+large-v3-turbo ~1.6 GB, the translator ~650 MB; `qwertone-analyze
+download-models` fetches them now). Both run on the CPU (int8) or an NVIDIA
+GPU, without PyTorch. On a laptop CPU, Whisper takes roughly 1–3 minutes for
+a 4-minute song; the translation a few seconds. Results are cached per song,
+so `--force` doesn't run them again.
+
+`--light` (or `QWERTONE_LIGHT=1`, or installing with `./setup.sh --light`)
+skips every model: only local files, tags and LRCLIB, still romanised.
+`--offline` never goes online (no LRCLIB, no AcoustID, no model downloads;
+models already downloaded still run; `QWERTONE_OFFLINE=1` does the same),
+`--no-translate` skips the translation, `--no-lyrics` on `analyze` skips the
+whole step. LRCLIB and AcoustID answers are cached in the per-song cache;
+"not found" is asked again after 7 days or with `--refresh`. If `lyrics.json`
+is up to date the step does nothing; `--force` rebuilds it. To undo an
+import, delete `lyrics/` in the song folder and run `qwertone-analyze lyrics`
+again.
+
+The translation model (NLLB-200) is licensed CC BY-NC 4.0: fine for your own
+use, not for selling.
 
 ### Other options
 
@@ -147,8 +193,10 @@ of failing:
 | torchcrepe | librosa pYIN pitch tracking (slower, a bit less accurate) |
 | basic-pitch | monophonic pitch tracker per stem |
 | piano model | Basic Pitch |
+| faster-whisper | lyrics only from .lrc / tags / LRCLIB; plain lyrics stay untimed |
+| ctranslate2 + sentencepiece | no English translation |
 
-Tempo, beats, key, chords and sections need no models at all.
+Tempo, beats, key, chords, sections and romanised lyrics need no models at all.
 
 ## How fast
 
@@ -170,8 +218,12 @@ check that the analyzer gets it right: tempo, beats, downbeats, key, every
 chord, the A B A sections, melody notes, drums, bass, simplification limits,
 the JSON schema, and that the MIDI tempo map matches the JSON times.
 `tests/test_lyrics.py` uses `tests/data/sample_ta.lrc` (Tamil + English lines,
-an offset, a repeated chorus, word timing) and a fake LRCLIB server; the
-suite never goes online.
+an offset, a repeated chorus, word timing) and a fake LRCLIB server;
+`tests/test_lyrics_models.py` covers Whisper transcription, alignment,
+translation, language detection (Tamil, Telugu, Hindi + English) and
+AcoustID with fake engines. The suite never goes online and never loads a
+lyrics model (`QWERTONE_LIGHT=1` is set for it); `QWERTONE_TEST_LYRICS_MODELS=1`
+additionally runs the real Whisper and translator (downloads ~2 GB).
 Model tests are marked `models` and skip themselves when a model isn't
 installed (`pytest -m "not models"` skips them on purpose).
 
@@ -205,7 +257,12 @@ qwertone_analyzer/
   lyrics.py       lyrics step: picks a source, lyrics.json, import-lrc
   lrc.py          .lrc parser (offsets, repeated lines, word timing)
   lrclib.py       LRCLIB lookup (stdlib HTTP, fuzzy match on title/artist/length)
-  tanglish.py     Tamil script -> Tanglish
+  languages.py    language of a line / a song, romanised-language word lists, NLLB codes
+  romanize.py     Indic scripts -> Latin (Aksharamukha + Tanglish/Hinglish rules)
+  asr.py          Whisper (faster-whisper) on the vocal stem, hallucination filter, lines
+  align.py        plain lyrics -> timing, matched against Whisper's words
+  translate.py    offline English translation (NLLB-200, CTranslate2)
+  acoustid.py     identify untagged files (fpcalc + AcoustID web service)
 ```
 
 ## For the next parts
@@ -214,53 +271,102 @@ The handoff notes for the app (Song mode, the note editor, live listen,
 jam mode) now live in [PLAN.md](../PLAN.md) at the top of the repo, with the
 rest of the project's notes.
 
-## Notes for later parts (from Part 10a-lite)
+## Lyrics notes (replace PLAN.md's "Lyrics notes" when merging)
 
-Written here because this part only touched `analyzer/`; move them into
-PLAN.md when merging.
+Written here because Parts 10a-lite and 10a-full only touch `analyzer/`
+(another branch edits PLAN.md); move this section into PLAN.md when merging.
+
+- Spotify's lyrics can't be used (no public API; licensed to Spotify). Lyrics
+  come from local files, LRCLIB, or are generated (Whisper). Spotify (Part 8)
+  only supplies title/artist/duration/position for lookup and sync.
+- **Songs are in several languages**: mostly Tamil, also Telugu and Hindi,
+  sometimes others. Nothing is Tamil-only: the language is stored per song
+  (`language`, `languages`) and per line (`lines[].language`, for songs that
+  mix e.g. Hindi + English). Whisper detects the song language from the
+  singing; `--language` (`--lyrics-language` on `analyze`) overrides it.
+- Three toggles per line: **native script** (`text`), **romanised**
+  (`romanized`: Tanglish / Tenglish / Hinglish …, one library — Aksharamukha
+  — for every Indian script), **English** (`translation`, offline machine
+  translation from any language, labelled as such).
+- Fonts: egui 0.37 shapes text with harfrust, so Indic scripts render when
+  the font is loaded: add Noto Sans Tamil, Noto Sans Telugu and Noto Sans
+  Devanagari (all in `noto-fonts`) as fallback fonts; more scripts as needed.
+- Source info is kept separately for words / timing / translation /
+  transliteration, per song and per line where it differs (e.g. user edits),
+  with the URL or file and fetch date, so the app can show a "where these
+  lyrics came from" badge. Model output is flagged in `auto_generated`.
+- Lyric timing uses seconds and beats (like notes) and the same Bluetooth
+  latency offset as Song mode.
+
+## Notes for later parts (from Parts 10a-lite and 10a-full)
 
 **For 10b (lyrics in the app)**
 - Read `lyrics.json` next to `song.json`; missing file = lyrics step never ran
   (offer "Find lyrics", which runs `qwertone-analyze lyrics <song dir>
-  --json-progress`; it prints a `{"event": "lyrics", "status": …}` line).
-  `status` `not_found` / `instrumental` → show that instead of an empty screen.
-- Three toggles map to `text` (Tamil script), `tanglish`, `translation`.
-  Hide the Tamil-script toggle for `ta-Latn` lines (`tanglish == text`) and the
-  English toggle while every `translation` is null. Load Noto Sans Tamil as a
-  fallback font (PLAN.md lyrics notes).
+  --json-progress`; it prints a `{"event": "lyrics", "status": …, "language":
+  …, "auto_generated": {…}}` line). `status` `not_found` / `instrumental` →
+  show that instead of an empty screen. Whisper can take minutes on a CPU:
+  show the `{"event": "stage", "stage": "lyrics", …}` lines ("transcribing 60 / 240 s"); `--light` makes it
+  quick (no models).
+- Toggles map to `text`, `romanized`, `translation` (**not** `tanglish`: that
+  10a-lite key is still written for Tamil lines but is deprecated). Hide the
+  native-script toggle for `*-Latn` lines (`romanized == text`), the romanised
+  toggle when `romanized` is null (English lines), and the English toggle while
+  every `translation` is null. English lines have `translation: null`: show
+  `text`. Label the English "machine translation".
+- Badge: `sources.words.name` (+ `timing` if different, + transliteration,
+  + translation), link to `url` or show `file`, and `fetched`. If
+  `auto_generated.words` / `.timing`, say so ("Auto-generated from the vocals
+  — may be wrong") and offer the editor / tap-along. `lines[].confidence`
+  (0–1, only on generated lines) can grey out doubtful lines.
+- Language: show `language` (and `languages` for mixed songs) and offer
+  "Wrong language?" → `qwertone-analyze lyrics <song> --language te --force`.
 - Current line: last line with `start <= t + bluetooth_offset`; use
   `start_beat`/`end_beat` in the falling-notes view so slow-down/loops line up
   with notes. Plain lyrics (`start == null`) can only be shown as a list.
-- The source badge: `sources.words.name` (+ `timing` if different, + "Tanglish
-  generated"), link to `url` or show `file`, and `fetched`.
 - Editor / tap-along: write edits back into `lyrics.json` with a per-line
   `"sources": {"timing": {"kind": "user", "name": "edited in Qwertone",
   "url": null, "file": null, "fetched": <now>}}` (or `words`). Re-running the
   lyrics step **overwrites** `lyrics.json`, so either export the edit as
   `lyrics/imported.lrc` (it then wins forever) or keep user edits in a
   separate file and merge on load — decide in 10b. The simplest is: the
-  editor saves `lyrics/imported.lrc` + runs `qwertone-analyze lyrics`.
-- Word timing exists only for enhanced-LRC sources; LRCLIB is line-level.
+  editor saves `lyrics/imported.lrc` + runs `qwertone-analyze lyrics`
+  (an imported synced .lrc is never re-aligned or re-transcribed; it is still
+  romanised and translated).
+- Word timing exists for enhanced-LRC sources, Whisper transcripts and well
+  aligned lines; LRCLIB is line-level.
 
-**For 10a-full (lyrics engine, rest)**
-- Whisper output fills `sources.words`/`timing` with `kind: "whisper"`;
-  force-aligning `plain` lyrics should keep `words` and set `timing` to the
-  aligner, the same split the LRCLIB "local words + remote timing" path uses
-  (`lyrics.build_lines(..., words_doc=...)`).
-- Translation: fill `lines[].translation` and `sources.translation` (`kind:
-  "translator"`, model name + version). Bump `lyrics.VERSION` so old files
-  rebuild.
-- AcoustID can feed better title/artist into `lyrics.lookup_query()` when the
-  tags are empty; LRCLIB matching needs ±3 s duration and a ≥ 0.6 title match.
-- Language detection is by script plus a small Tanglish word list
-  (`lyrics.TANGLISH_WORDS`); Whisper's language id can replace it.
-- Tanglish rules are in a table at the top of `tanglish.py`; if the user wants
-  "ch" instead of "s" for word-initial ச (chinna vs sinna), that's the `BASE`
-  entry — consider making it a setting.
+**From 10a-full (what was built, and what's left)**
+- Whisper is faster-whisper (CTranslate2), default `large-v3-turbo`, int8 on
+  the CPU. Transcripts are split into lines at 0.6 s pauses / 48 characters;
+  typical music hallucinations ("Thank you for watching", loops, high
+  compression ratio, silence) are dropped (`asr.good_segments`).
+- Alignment (`align.py`) is word-level: Whisper's words vs the lyric words by
+  a sound-alike key on romanised text, Needleman–Wunsch with free end gaps.
+  It is not a phoneme forced aligner: lines Whisper hears badly get spread-out
+  times and a low `confidence`. If that's not good enough on real songs, the
+  next step is CTC forced alignment (MMS / wav2vec2 on romanised text, which
+  `romanize.ascii_key` already produces) — heavier (torch, ~1.2 GB).
+- Translation: NLLB-200 distilled 600M (CT2 int8, CC BY-NC). Romanised lines
+  (Tanglish typed in Latin letters) aren't translated; transliterating them
+  back to script first would be the fix.
+- Whisper's "Urdu" for sung Hindi is mapped to Hindi (`languages.WHISPER_TO_FAMILY`).
+- Not run against the real models in CI (no model downloads there): the
+  engines are faked in `tests/test_lyrics_models.py`. Run
+  `QWERTONE_TEST_LYRICS_MODELS=1 .venv/bin/python -m pytest tests/test_lyrics_models.py`
+  once on a real machine, and try a few real Tamil / Telugu / Hindi songs.
+- Romanisation rules are in `romanize._tidy`; word-initial ச is "s"
+  (sinna, not chinna), as most Tanglish typists write it — make it a setting
+  if wanted.
 
-**For merging (PLAN.md build order: 7 merges part-10a-lyrics first)**
+**For merging**
 - Only `analyzer/` changed. `song.json` is unchanged and its fingerprint
-  ignores the new `lyrics`/`lyrics_online` options, so existing song folders
-  are not re-analysed; running `analyze` on them again adds `lyrics.json`.
-- New dependency: `mutagen` (pure Python, for synced ID3 SYLT lyrics); the
-  code works without it.
+  ignores every lyrics option, so existing song folders are not re-analysed.
+  `lyrics.json` files from 10a-lite rebuild on the next `lyrics` / `analyze`
+  run (`lyrics_version` 2); `format_version` is still 1 (only keys were added).
+- New dependencies: `mutagen` and `aksharamukha` (pure Python, always
+  installed); `faster-whisper`, `ctranslate2`, `sentencepiece`,
+  `huggingface_hub` in the `models` extra (and a `lyrics` extra on their own).
+  `setup.sh` also installs `chromaprint` (fpcalc) with pacman.
+- `tanglish.py` is gone (replaced by `romanize.py`); `lyrics.line_language` /
+  `song_language` / `TANGLISH_WORDS` still exist as aliases into `languages.py`.

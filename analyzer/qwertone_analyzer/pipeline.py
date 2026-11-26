@@ -20,7 +20,8 @@ from .writer import default_songs_dir, part_id, slugify, write_song
 MODES = ("chords", "melody", "chords+melody", "full", "instrument", "simplified")
 INSTRUMENTS = ("bass", "piano", "drums")
 # options that don't change song.json (the lyrics step has its own file and fingerprint)
-NOT_IN_FINGERPRINT = ("out_dir", "cache_dir", "use_cache", "force", "lyrics", "lyrics_online")
+NOT_IN_FINGERPRINT = ("out_dir", "cache_dir", "use_cache", "force", "lyrics", "lyrics_online", "lyrics_models",
+                      "lyrics_language", "whisper_model", "translate", "acoustid", "acoustid_key")
 MODE_ALIASES = {"chords-melody": "chords+melody", "chords_melody": "chords+melody", "simple": "simplified",
                 "easy": "simplified", "transcribe": "full"}
 
@@ -46,7 +47,13 @@ class Options:
     use_cache: bool = True
     force: bool = False
     lyrics: bool = True                    # run the lyrics step after writing song.json
-    lyrics_online: bool = True             # let the lyrics step ask LRCLIB
+    lyrics_online: bool = True             # let the lyrics step ask LRCLIB / AcoustID and download models
+    lyrics_models: bool = True             # False = --light: no Whisper / alignment / translation
+    lyrics_language: str | None = None     # song language for the lyrics step (ta, te, hi ...); default: detect
+    whisper_model: str = "auto"            # auto = large-v3-turbo
+    translate: bool = True                 # English machine translation of the lyrics
+    acoustid: str = "auto"                 # auto | always | never
+    acoustid_key: str | None = None
 
     def normalized(self) -> "Options":
         o = Options(**asdict(self))
@@ -163,7 +170,9 @@ def _lyrics_step(song_dir: Path, opts: Options):
     from . import lyrics
     try:
         return lyrics.run_lyrics(song_dir, lyrics.LyricsOptions(
-            online=opts.lyrics_online, cache_dir=opts.cache_dir, use_cache=opts.use_cache))
+            online=opts.lyrics_online, cache_dir=opts.cache_dir, use_cache=opts.use_cache,
+            models=opts.lyrics_models, language=opts.lyrics_language, whisper_model=opts.whisper_model,
+            device=opts.device, translate=opts.translate, acoustid=opts.acoustid, acoustid_key=opts.acoustid_key))
     except Exception as e:  # noqa: BLE001 - lyrics are a bonus; the song folder is already written
         log("lyrics", f"skipped: {e}")
         return None

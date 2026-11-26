@@ -233,46 +233,99 @@ file with its own `format_version`, so re-fetching lyrics never touches
 
 Same conventions as `song.json`: times in seconds from the start of the
 recording, `start_beat`/`end_beat` as fractional indices into `song.json`'s
-`beats`, unknown keys ignored. Text is UTF-8 (Tamil script as is).
+`beats`, unknown keys ignored. Text is UTF-8, in whatever script it was sung
+in (Tamil, Telugu, Devanagari, Latin ...).
+
+Songs are in many languages (mostly Tamil, also Telugu and Hindi, sometimes
+others), so everything is per language: the song has one `language` plus the
+list of every line language in `languages`, and **each line has its own
+`language`** (a Hindi song with English lines has both). `romanized` and
+`translation` follow the line's language.
 
 ```jsonc
 {
   "format": "qwertone-lyrics",
   "format_version": 1,
-  "analyzer": { "version": "0.6.0", "lyrics_version": 1, "created": "2026-11-26T10:59:27+00:00",
-                "fingerprint": "…", "online": true },
+  "analyzer": { "version": "0.6.0", "lyrics_version": 2, "created": "2026-11-26T10:59:27+00:00",
+                "fingerprint": "…", "online": true,
+                "models": true,          // false with --light (no Whisper / translation)
+                "incomplete": false },   // a model step failed (e.g. no weights offline): the next run retries
   "song": { "title": "Kaalai Thendral", "artist": "…", "album": null,   // what was looked up
-            "duration": 30.0, "sha256": "…" },                          // = song.json source.sha256
+            "duration": 30.0, "sha256": "…",                            // = song.json source.sha256
+            "identified_by": null },     // or { "kind": "acoustid", "name": "AcoustID", "url": "https://acoustid.org/track/…",
+                                         //      "title", "artist", "album", "score", "recording_id", "fetched" }
   "status": "synced",          // synced | plain (no timing) | instrumental | not_found
-  "language": "ta",            // BCP 47: ta, en, ta-Latn (Tanglish written in Latin letters), hi, te, ml, kn, und
+  "language": "ta",            // the song's language, BCP 47 (see "Languages")
+  "languages": ["ta", "en"],   // every line language, most lines first
+  "language_source": "whisper",// user (--language) | whisper (heard) | text (script of the lyrics) | tag ([la:]) | none
   "has_word_timing": true,     // some lines have "words"
+  "auto_generated": {          // made by a model, not written by a person: show it in the app
+    "words": false,            //   Whisper transcribed the vocals
+    "timing": false,           //   Whisper transcribed them, or plain lyrics were aligned to them
+    "translation": true        //   always machine translation when present
+  },
   "offset": 0.2,               // the source's [offset:] in seconds, ALREADY applied to every time
   "sources": {                 // where each layer came from; null = not available
     "words":  { "kind": "lrclib", "name": "LRCLIB", "url": "https://lrclib.net/api/get/4242",
                 "file": null, "fetched": "2026-11-26T10:59:27+00:00", "id": 4242,
                 "track": "…", "artist": "…", "album": "…", "duration": 30 },
-    "timing": { … },           // often the same object as words, can differ (local words + LRCLIB timing)
-    "translation": null,       // Part 10a-full (offline English translation)
-    "transliteration": { "kind": "generated", "name": "Qwertone Tanglish", "url": null, "file": null,
-                         "fetched": "…", "version": 1 }   // null when no line has Tamil script
+    "timing": { … },           // often the same object as words, can differ (local words + LRCLIB / aligner timing)
+    "translation": { "kind": "translator", "name": "NLLB-200 distilled 600M (machine translation)",
+                     "url": "https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2-int8", "file": null,
+                     "fetched": "…", "model": "…", "target": "en", "version": 1,
+                     "machine_translation": true, "auto_generated": true },
+    "transliteration": { "kind": "generated", "name": "Aksharamukha romanisation",
+                         "url": "https://aksharamukha.appspot.com", "file": null, "fetched": "…",
+                         "version": 2, "library": "aksharamukha 2.3",
+                         "style": "RomanReadable + Qwertone rules (Tanglish / Tenglish / Hinglish)" }
+                       // null when no line is in an Indian script
   },
+  "whisper": { "model": "large-v3-turbo", "language": "ta", "detected": "ta",   // only when Whisper ran
+               "language_probability": 0.83, "top_languages": [["ta", 0.83], ["ml", 0.09]],
+               "per_window_language": false },
   "lines": [
     {
       "start": 2.0, "end": 5.5,            // null for status "plain"
       "start_beat": 3.0, "end_beat": 10.0, // null when plain or song.json has no beats
       "text": "காலை தென்றல் வந்தது",
-      "language": "ta",                    // per line: songs mix Tamil and English lines
-      "tanglish": "kaalai thendral vandhadhu",  // Tamil script -> Tanglish; = text for ta-Latn lines; else null
-      "translation": null,                 // English, machine-made, Part 10a-full
-      "words": [                           // null unless the source has word timing (enhanced LRC)
+      "language": "ta",                    // per line
+      "romanized": "kaalai thendral vandhadhu",   // Latin letters; = text for ta-Latn/hi-Latn/te-Latn lines; else null
+      "tanglish": "kaalai thendral vandhadhu",    // DEPRECATED (10a-lite name): = romanized on Tamil lines, else null
+      "translation": "The morning breeze came",   // English machine translation; null for English / romanised lines
+      "confidence": 0.87,                  // only when words or timing are auto-generated (0-1)
+      "words": [                           // null unless the source has word timing
         { "text": "காலை", "start": 2.0, "end": 2.6, "start_beat": 3.0, "end_beat": 4.2,
-          "tanglish": "kaalai" }
+          "romanized": "kaalai", "tanglish": "kaalai" }
       ]
       // "sources": { "timing": { "kind": "user", … } }   optional per-line override, see below
     }
   ]
 }
 ```
+
+### Languages
+
+| `language` | means | `romanized` | `translation` |
+|---|---|---|---|
+| `ta`, `te`, `hi`, `kn`, `ml`, `bn`, `gu`, `pa`, `or`, `mr` … | that language in its own script | Tanglish / Tenglish / Hinglish … | English |
+| `ta-Latn`, `te-Latn`, `hi-Latn` | written in Latin letters (Tanglish, Tenglish, Hinglish) | = `text` | null (no model reads romanised text) |
+| `en` | English | null | null (show `text`) |
+| `ar`, `ru`, `ko`, `ja`, `zh` … | other scripts Whisper writes | null | English |
+| `und` | unknown (no letters) | null | null |
+
+How a line's language is decided: its script (Tamil, Telugu, Devanagari …);
+Latin text is English unless enough common Tanglish / Hinglish / Tenglish
+words appear in it. The song's language decides between languages sharing a
+script (Devanagari is Hindi unless the song is Marathi …). The song
+`language` is `--language` if given, else the lines (a song with a few
+English lines is still a Tamil/Hindi/Telugu song), else what Whisper heard,
+else the LRC `[la:]` tag.
+
+The app: hide the native-script toggle for `*-Latn` lines (`romanized ==
+text`), the romanised toggle when `romanized` is null, and the English
+toggle while every `translation` is null. Label translations "machine
+translation" (`sources.translation.machine_translation`). Load Noto Sans
+Tamil / Telugu / Devanagari as fallback fonts.
 
 ### Sources
 
@@ -285,9 +338,11 @@ imported). Extra keys by kind:
 | `file` | an .lrc next to the audio (`Song.lrc`), or one imported into the song folder | `sha256`, `modified`, `by` (LRC `[by:]`), `copy` (`lyrics/imported.lrc` for imports; `file` is then the original path) |
 | `embedded` | the audio file's own tags (USLT / LYRICS / ©lyr, ID3 SYLT) | `tag`, `sha256` |
 | `lrclib` | [LRCLIB](https://lrclib.net) | `id`, `track`, `artist`, `album`, `duration` |
-| `generated` | made by the analyzer (Tanglish) | `version` |
+| `whisper` | transcribed from the vocal stem (auto-generated words + timing) | `model`, `language`, `detected`, `language_probability`, `auto_generated`; `file` = `stems/vocals.flac` (or the audio file when there was no vocal stem) |
+| `aligner` | plain lyrics aligned to the vocal stem with Whisper (auto-generated timing) | `model`, `version`, `matched` (share of lyric words heard), `auto_generated`; `file` as above |
+| `translator` | offline machine translation | `model`, `target`, `version`, `machine_translation`, `auto_generated` |
+| `generated` | made by the analyzer (romanisation) | `version`, `library`, `style` |
 | `user` | edited in the app (Part 10b) | anything useful, e.g. `edited` |
-| `whisper`, `translator` | reserved for Part 10a-full | |
 
 Top-level `sources` describe the whole song. A line may carry its own
 `sources` object with any of the same four keys; those override the top level
@@ -301,13 +356,19 @@ doesn't have fall back to the top level.
 2. an .lrc next to the audio file, same name (`Song.mp3` → `Song.lrc`),
 3. lyrics in the audio file's tags,
 4. LRCLIB, by title, artist, album and duration (±3 s). If song.json has no
-   artist and the file is named `Artist - Title`, that is used.
+   artist and the file is named `Artist - Title`, that is used. A file with
+   no title/artist tags can be identified with AcoustID first (needs `fpcalc`
+   and a free API key; see the analyzer README).
+5. Whisper on the vocal stem (`auto_generated.words`), when none of the above
+   has lyrics and LRCLIB doesn't say the song is instrumental.
 
-The first one with **synced** lyrics wins. If 1–3 only have plain text,
+The first one with **synced** lyrics wins. If 1–4 only have plain text,
 LRCLIB is still asked: when its synced lyrics are the same text (≥ 80 %
 similar line by line, same line count), `words` stays the local source and
-`timing` becomes LRCLIB. If the text differs, the local plain lyrics are kept
-(status `plain`).
+`timing` becomes LRCLIB. Otherwise the plain lyrics are **aligned** to the
+vocal stem (`timing.kind` = `aligner`, `auto_generated.timing`); if under
+30 % of their words are heard, they stay `plain`. With `--light` (no models)
+steps 5 and the alignment are skipped.
 
 ### Timing rules
 
@@ -318,16 +379,35 @@ similar line by line, same line count), `words` stays the local source and
   timestamp, sorted by time; word times move with it.
 - Words without an end stamp end where the next word starts (the last one:
   at the line end).
+- Whisper lines are sung phrases: a segment is split at pauses of 0.6 s or
+  more and at 48 characters, and every line has word timing.
+- Aligned lines have word timing when at least half their words were heard;
+  words between heard ones are spread evenly.
 - The app adds the same Bluetooth latency offset as Song mode; nothing in
   lyrics.json accounts for it.
 
-### Tanglish
+### Romanisation
 
-Rule-based transliteration (`qwertone_analyzer/tanglish.py`), written the way
-Tamil is commonly typed: long vowels doubled (`aa`, `ee`, `oo`), `zh` for ழ,
-and the sound of க/ச/ட/த/ப/ற picked from the letters around it (`kaadhal`,
-`nenjam`, `endru`, `vanakkam`). Non-Tamil text in a line is kept as is.
+One library for every Indian script: [Aksharamukha](https://github.com/virtualvinodh/aksharamukha)
+(`RomanReadable`), with a few rules on top so it reads the way people type:
+
+- Tamil (Tanglish): long vowels doubled (`aa`, `ee`, `oo`), `zh` for ழ, and
+  the sound of க/ச/ட/த/ப/ற picked from the letters around it (`kaadhal`,
+  `nenjam`, `endru`, `vanakkam`, `pacchai`).
+- Hindi (Hinglish): the silent a is dropped (`dil`, not `dila`), nasals are
+  `n` (`main`, `hoon`, `hain`), word-final long ī/ā are short (`kabhi`, `tera`).
+- Telugu (Tenglish), Kannada, Malayalam, Bengali, Gujarati, Punjabi, Odia:
+  `RomanReadable` as is (`nuvvu naa praanam`).
+
+Text in other scripts in the same line (English words) is kept as is.
 `version` in the transliteration source changes when the rules change.
+
+### Translation
+
+Offline, per line, from the line's own language to English, with NLLB-200
+(about 200 languages, so any language Whisper detects). English lines and
+romanised lines (`*-Latn`) get `null`. It is machine translation of song
+lyrics: literal, sometimes wrong; the app must label it so.
 
 ## Reading it from Rust (sketch for Part 5)
 

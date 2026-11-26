@@ -4,7 +4,8 @@
 #   ./setup.sh              CPU-only (works everywhere, ~1.5 GB)
 #   ./setup.sh --gpu        NVIDIA GPU build of PyTorch (~5 GB, much faster stems)
 #   ./setup.sh --light      no machine-learning models (chords/key/tempo only,
-#                           pYIN melody, no stems) - ~200 MB
+#                           pYIN melody, no stems, lyrics only from .lrc /
+#                           tags / LRCLIB: no Whisper, no translation) - ~200 MB
 #
 # Other flags:
 #   --torch-index URL   install PyTorch from this index (e.g. a ROCm one for AMD GPUs)
@@ -36,7 +37,7 @@ while [[ $# -gt 0 ]]; do
         --no-download) DOWNLOAD=0 ;;
         --no-pacman) PACMAN=0 ;;
         --no-link) LINK=0 ;;
-        -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
         *) die "unknown option $1 (see --help)" ;;
     esac
     shift
@@ -44,10 +45,11 @@ done
 
 if [[ $PACMAN -eq 1 ]]; then
     if command -v pacman >/dev/null; then
-        say "Installing system packages (needs sudo): ffmpeg uv"
-        sudo pacman -S --needed ffmpeg uv
+        say "Installing system packages (needs sudo): ffmpeg uv chromaprint"
+        sudo pacman -S --needed ffmpeg uv chromaprint
     else
-        echo "pacman not found: make sure ffmpeg and uv (https://docs.astral.sh/uv/) are installed."
+        echo "pacman not found: make sure ffmpeg and uv (https://docs.astral.sh/uv/) are installed"
+        echo "(and chromaprint's fpcalc if you want AcoustID to identify untagged files)."
     fi
 fi
 command -v uv >/dev/null || die "uv is missing (sudo pacman -S uv)"
@@ -85,7 +87,7 @@ if [[ $LINK -eq 1 ]]; then
 fi
 
 if [[ $MODELS -eq 1 && $DOWNLOAD -eq 1 ]]; then
-    say "Downloading model weights (Demucs ~80 MB, piano model ~165 MB)"
+    say "Downloading model weights (Demucs ~80 MB, piano ~165 MB, Whisper ~1.6 GB, translator ~650 MB)"
     "$VENV/bin/qwertone-analyze" download-models || echo "warning: download failed; weights will download on first use"
 fi
 

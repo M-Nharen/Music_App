@@ -1,4 +1,4 @@
-"""Lyrics step (Part 10a-lite): .lrc parsing, Tanglish, LRCLIB lookup + cache,
+"""Lyrics step (Part 10a-lite): .lrc parsing, romanisation, LRCLIB lookup + cache,
 lyrics.json against schema/lyrics.schema.json, and the lyrics / import-lrc commands.
 LRCLIB is never contacted: `lrclib.http_get` is replaced by a fake server."""
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from qwertone_analyzer import cli, lrc, lrclib, lyrics, pipeline, tanglish
+from qwertone_analyzer import cli, lrc, lrclib, lyrics, pipeline, romanize
 from qwertone_analyzer.cache import file_sha256
 from qwertone_analyzer.progress import configure
 
@@ -120,7 +120,7 @@ def test_parse_variants():
     assert neg.lines[0].start == 1.5
 
 
-# ============================================================================ Tanglish
+# ============================================================================ romanisation (Tanglish, Tenglish, Hinglish)
 
 @pytest.mark.parametrize("tamil,expected", [
     ("வணக்கம்", "vanakkam"), ("தமிழ்", "thamizh"), ("நன்றி", "nandri"), ("அன்பு", "anbu"),
@@ -128,17 +128,35 @@ def test_parse_variants():
     ("பச்சை", "pacchai"), ("காற்று", "kaatru"), ("மகன்", "magan"), ("சங்கம்", "sangam"),
     ("முத்தம்", "muttham"), ("கண்ணில்", "kannil"), ("பாட்டு", "paattu"), ("நெஞ்சில்", "nenjil"),
     ("வாழ்க", "vaazhga"), ("கட்சி", "katchi"), ("பயிற்சி", "payirchi"), ("ஞானம்", "gnaanam"),
-    ("ஸ்ரீ", "sri"), ("ஏன்", "aen"), ("உயிரே", "uyire"), ("அஜித்", "ajith"), ("௨௦௨௬", "2026"),
+    ("ஸ்ரீ", "sri"), ("ஏன்", "en"), ("உயிரே", "uyire"), ("அஜித்", "ajith"), ("௨௦௨௬", "2026"),
+    ("ஆஃப்", "aaf"), ("பூக்கள்", "pookkal"),
 ])
 def test_tanglish_words(tamil, expected):
-    assert tanglish.transliterate(tamil) == expected
+    assert romanize.romanize(tamil, "ta") == expected
+
+
+@pytest.mark.parametrize("text,lang,expected", [
+    ("నువ్వు నా ప్రాణం", "te", "nuvvu naa praanam"),
+    ("ప్రేమ అంటే ఏమిటి", "te", "prema ante emiti"),
+    ("చెప్పవే చిరుగాలి", "te", "cheppave chirugaali"),
+    ("तुम ही हो", "hi", "tum hi ho"),
+    ("मैं तेरा प्यार हूँ", "hi", "main tera pyaar hoon"),
+    ("कभी कभी मेरे दिल में", "hi", "kabhi kabhi mere dil men"),
+    ("हम आपके हैं कौन", "hi", "ham aapke hain kaun"),
+    ("ನನ್ನ ಹೃದಯ", "kn", "nanna hridaya"),
+])
+def test_romanize_telugu_hindi_kannada(text, lang, expected):
+    assert romanize.romanize(text, lang) == expected
 
 
 def test_tanglish_lines_and_mixed_text():
-    assert tanglish.transliterate("வா வா என் அன்பே") == "vaa vaa en anbe"
-    assert tanglish.transliterate("Hello தமிழ், rock-ல் ஆடு!") == "Hello thamizh, rock-l aadu!"
+    assert romanize.romanize("வா வா என் அன்பே", "ta") == "vaa vaa en anbe"
+    assert romanize.romanize("Hello தமிழ், rock-ல் ஆடு!", "ta") == "Hello thamizh, rock-l aadu!"
     import unicodedata
-    assert tanglish.transliterate(unicodedata.normalize("NFD", "கொஞ்சம் போ")) == "konjam po"
+    assert romanize.romanize(unicodedata.normalize("NFD", "கொஞ்சம் போ"), "ta") == "konjam po"
+    # two scripts in one line, each romanised with its own rules
+    assert romanize.romanize("दिल நெஞ்சம் don't", None) == "dil nenjam don't"
+    assert romanize.romanize("plain English", "en") == "plain English"
 
 
 def test_line_language():
@@ -147,6 +165,11 @@ def test_line_language():
     assert lyrics.line_language("nee enna solla vandha") == "ta-Latn"
     assert lyrics.line_language("नमस्ते दुनिया") == "hi"
     assert lyrics.line_language("Morning breeze", song_hint="ta-Latn") == "ta-Latn"
+    assert lyrics.line_language("నువ్వు నా ప్రాణం") == "te"
+    assert lyrics.line_language("ನನ್ನ ಹೃದಯ") == "kn"
+    assert lyrics.line_language("tum hi ho, dil mera tera hai") == "hi-Latn"
+    assert lyrics.line_language("nuvvu naaku prema ante emiti") == "te-Latn"
+    assert lyrics.line_language("मी तुझा", song_hint="mr") == "mr"          # Devanagari, but a Marathi song
 
 
 # ============================================================================ lyrics.json from a local .lrc
