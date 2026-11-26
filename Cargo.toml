@@ -14,6 +14,8 @@ pipewire = ["cpal/pipewire"]
 
 [dependencies]
 anyhow = "1.0.105"
+# FLAC decoding for the analyzer's stems (Jam mode, Part 7).
+claxon = "0.4.3"
 cpal = { version = "0.18.2", features = ["realtime"] }
 crossbeam-channel = "0.5.17"
 dirs = "7.0.0"

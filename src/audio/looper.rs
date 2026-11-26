@@ -157,6 +157,9 @@ pub enum LoopCommand {
     Clear,
     /// Mute / unmute a layer (0-based).
     Mute(u8),
+    /// Channels the open song plays its parts on (bit per channel): new
+    /// layers don't borrow them, so a song can't change a layer's sound.
+    Reserve(u16),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -203,6 +206,8 @@ pub struct Looper {
     seq: u32,
     /// Instruments to set on lent channels: (channel, program), NONE = none.
     program_req: [u8; 16],
+    /// Channels the song uses (see `LoopCommand::Reserve`).
+    reserved: u16,
 }
 
 impl Looper {
@@ -221,6 +226,7 @@ impl Looper {
             pass: 0,
             seq: 0,
             program_req: [NONE; 16],
+            reserved: 0,
         }
     }
 
@@ -300,6 +306,7 @@ impl Looper {
         out: &mut impl FnMut(SeqEvent),
     ) -> Option<u64> {
         match cmd {
+            LoopCommand::Reserve(mask) => self.reserved = mask,
             LoopCommand::Rec { bars, .. } => match self.state {
                 LoopState::Empty => {
                     self.clear(out);
@@ -546,7 +553,7 @@ impl Looper {
     }
 
     fn lend_channel(&mut self, i: usize, src: u8, program: u8) {
-        let used = self.channels_in_use();
+        let used = self.channels_in_use() | self.reserved;
         match POOL.iter().find(|&&c| used & (1 << c) == 0) {
             Some(&c) => {
                 self.layers[i].out[src as usize] = c;
@@ -758,6 +765,23 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn layers_dont_borrow_the_songs_channels() {
+        let mut l = looper();
+        let progs = [0u8; 16];
+        l.command(
+            LoopCommand::Reserve((1 << 15) | (1 << 14)),
+            0,
+            0,
+            &mut |_| {},
+        );
+        l.command(rec(1), 0, 0, &mut |_| {});
+        l.record(BEAT, on(0, 60), &progs);
+        l.record(BEAT + 100, off(0, 60), &progs);
+        run(&mut l, 0, 2 * BAR);
+        assert_eq!(l.channels_in_use(), 1 << 13);
     }
 
     #[test]

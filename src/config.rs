@@ -109,6 +109,29 @@ pub struct Config {
     pub midi_out_song: bool,
     /// Keep playing the sound here while MIDI out is on.
     pub midi_out_local: bool,
+
+    // ---- Jam mode (Part 7).
+    pub jam: JamSettings,
+}
+
+/// Jam mode: the analyzer's stems as the backing track.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct JamSettings {
+    /// Play the real recording (stems) instead of the MIDI parts when a
+    /// song has stems.
+    pub on: bool,
+    /// Volume per stem name ("vocals", "drums", …), 0–1.5; missing = 1.
+    pub volumes: BTreeMap<String, f32>,
+}
+
+impl Default for JamSettings {
+    fn default() -> Self {
+        Self {
+            on: true,
+            volumes: BTreeMap::new(),
+        }
+    }
 }
 
 /// Song mode and live listen settings, plus best scores.
@@ -132,6 +155,11 @@ pub struct SongSettings {
     pub backing: f32,
     /// Extra sync adjustment on top of the measured delay (ms, + = later).
     pub offset_ms: f32,
+    /// Bluetooth delay compensation (Part 7): the falling notes run ahead
+    /// of the sound by the output delay, so a key pressed on the line
+    /// sounds together with the backing (same as delaying the backing and
+    /// the notes by the delay). Off = the notes follow what you hear.
+    pub line_up: bool,
     /// How many beats of falling notes to show.
     pub beats_visible: f32,
     /// Best accuracy (0–100) per song id.
@@ -157,6 +185,7 @@ impl Default for SongSettings {
             auto_speed: true,
             backing: 0.8,
             offset_ms: 0.0,
+            line_up: true,
             beats_visible: 8.0,
             best: BTreeMap::new(),
             recent: Vec::new(),
@@ -234,6 +263,7 @@ impl Default for Config {
             midi_out: false,
             midi_out_song: false,
             midi_out_local: true,
+            jam: JamSettings::default(),
         }
     }
 }

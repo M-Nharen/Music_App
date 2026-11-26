@@ -3,6 +3,7 @@
 //! next note in wait mode. Events are sample-accurate like the sequencer.
 
 use super::sequencer::SeqEvent;
+use super::stems::{MAX_STEMS, SongCtx, StemPlayer, StemSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -57,6 +58,14 @@ pub enum SongCommand {
     Loop(Option<(f64, f64)>),
     /// Backing volume 0..1.5.
     Gain(f32),
+    /// Jam mode (Part 7): the stems to play (the UI keeps the Arc too).
+    Stems(Option<Arc<StemSet>>),
+    /// Play the stems (or keep them quiet).
+    StemsOn(bool),
+    /// Gain per stem (index into the set), mute = 0.
+    StemGains([f32; MAX_STEMS]),
+    /// Pitch shift of the stems in semitones (easy parts in another key).
+    StemPitch(i32),
 }
 
 /// What the UI reads to draw and score: where the song was at `at`.
@@ -110,6 +119,7 @@ pub struct SongPlayer {
     /// When it last stopped moving (pos, wall time): kept while stopped so
     /// the UI can tell how much sound is still on its way.
     stopped_at: Option<(f64, Instant)>,
+    stems: StemPlayer,
 }
 
 impl SongPlayer {
@@ -130,6 +140,7 @@ impl SongPlayer {
             loops: 0,
             ended: false,
             stopped_at: Some((0.0, Instant::now() - Duration::from_secs(60))),
+            stems: StemPlayer::new(sample_rate),
         }
     }
 
@@ -215,7 +226,24 @@ impl SongPlayer {
                 self.looping = l.filter(|(a, b)| b > a);
             }
             SongCommand::Gain(g) => self.gain = g.clamp(0.0, 1.5),
+            SongCommand::Stems(s) => self.stems.set_stems(s),
+            SongCommand::StemsOn(on) => self.stems.set_on(on),
+            SongCommand::StemGains(g) => self.stems.set_gains(g),
+            SongCommand::StemPitch(p) => self.stems.set_semitones(p),
         }
+    }
+
+    /// Add the stems for the next `l.len()` samples (call before `advance`).
+    pub fn render_stems(&mut self, l: &mut [f32], r: &mut [f32]) {
+        let ctx = SongCtx {
+            pos: self.pos,
+            speed: self.speed,
+            playing: self.playing && self.data.is_some(),
+            moving: self.moving(),
+            wait: self.wait,
+            jumps: self.seeks.wrapping_add(self.loops),
+        };
+        self.stems.render(l, r, ctx);
     }
 
     fn seek(&mut self, t: f64, now: Instant, out: &mut impl FnMut(SeqEvent)) {

@@ -30,12 +30,12 @@ This file is the shared memory between build sessions. Each session: read it, bu
 | 4 | **4a:** metronome + count-in + tap tempo, recording → MIDI export. **4b:** looper, virtual MIDI out (ALSA seq / PipeWire MIDI), more instruments | **done** (4a on `part-4a-record`, from `part-5-songs`; 4b on `part-4b-loop`, from `part-4a-record`) |
 | 5 | Song mode from analyzer song folders and MIDI files: falling notes labelled with keyboard keys, chord sheet, wait mode, loop + slow down, scoring, one-key mode, auto song layout, Bluetooth-synced visuals and scoring, analyzer started from the app with a progress bar | **done** (branch `part-5-songs`, which also has Part 6 merged in) |
 | 6 | Python pipeline: Demucs stems → extraction modes (chords only / melody only via CREPE / chords+melody / full via Basic Pitch / single instrument incl. piano model + drums / simplified) + confidence highlighting + note editor. Live listen mode | **done** (analyzer on branch `part-6-analyzer`; the note editor and live listen mode were built in Rust in `part-5-songs`) |
-| 7 | Jam mode: stem mixer with your part muted, time-stretch, Bluetooth delay compensation of backing + visuals | |
+| 7 | Jam mode: stem mixer with your part muted, time-stretch, Bluetooth delay compensation of backing + visuals | **done** (branch `part-7-jam`, which also has 10a-lite + 10a-full merged in) |
 | 8 | Spotify: PKCE login, search, remote control, now-playing → open practice version, sync mode | |
 | 9 | Polish: themes, stats, streaks, more lessons | |
-| 10a-lite | Lyrics engine, small (analyzer/ only): `.lrc` + embedded tags + LRCLIB synced lyrics, Tanglish transliteration, `lyrics.json` with source info for words / timing / translation | |
+| 10a-lite | Lyrics engine, small (analyzer/ only): `.lrc` + embedded tags + LRCLIB synced lyrics, Tanglish transliteration, `lyrics.json` with source info for words / timing / translation | **done** (branch `part-10a-lyrics`) |
 | 10b | Lyrics in the app: Spotify-style Lyrics screen, current line inside the falling-notes area (toggle, top/bottom), source badge, lyrics editor, tap-along timing, Bluetooth offset + manual nudge | |
-| 10a-full | Lyrics engine, rest: Whisper (faster-whisper) transcription of the vocal stem with language auto-detect, force-aligning plain lyrics, offline English translation, AcoustID lookup | |
+| 10a-full | Lyrics engine, rest: Whisper (faster-whisper) transcription of the vocal stem with language auto-detect, force-aligning plain lyrics, offline English translation, AcoustID lookup | **done** (branch `part-10a-full`, includes 10a-lite) |
 
 ## Build order
 
@@ -44,22 +44,136 @@ Each part starts from the newest branch (it contains everything before it). Don'
 | Order | Part | Start from | Push to | Can run alongside |
 |---|---|---|---|---|
 | 1 | 4b looper + MIDI out (**done**) | `part-4a-record` | `part-4b-loop` | 10a-lite |
-| 1 | 10a-lite lyrics engine | `part-4a-record` | `part-10a-lyrics` | 4b (only edits `analyzer/`) |
-| 2 | 7 Jam mode | `part-4b-loop` (merge `part-10a-lyrics` first) | `part-7-jam` | — |
-| 3 | 10b lyrics in the app | `part-7-jam` | `part-10b-lyrics` | 10a-full |
-| 3 | 10a-full lyrics engine | `part-10a-lyrics` | `part-10a-full` | 10b (only edits `analyzer/`) |
-| 4 | 8 Spotify (also: sync lyrics with Spotify playback) | latest | `part-8-spotify` | — |
-| 5 | 9 Polish, then merge everything into `main` | latest | `main` | — |
+| 1 | 10a-lite lyrics engine (**done**) | `part-4a-record` | `part-10a-lyrics` | 4b (only edits `analyzer/`) |
+| 2 | 10a-full lyrics engine (**done**) | `part-10a-lyrics` | `part-10a-full` | — (only edits `analyzer/`) |
+| 3 | 7 Jam mode (**done**) | `part-4b-loop` (merged `part-10a-full` first) | `part-7-jam` | — |
+| 4 | 10b lyrics in the app | `part-7-jam` | `part-10b-lyrics` | — |
+| 5 | 8 Spotify (also: sync lyrics with Spotify playback) | latest | `part-8-spotify` | — |
+| 6 | 9 Polish, then merge everything into `main` | latest | `main` | — |
 
 ### Lyrics notes (Part 10)
 
-- Spotify's lyrics can't be used (no public API; licensed to Spotify). Lyrics come from local files, LRCLIB, or are generated. Spotify (Part 8) only supplies title/artist/duration/position for lookup and sync.
-- The user mostly listens to Tamil songs. Show three toggles per line: Tamil script, Tanglish (romanised), English (machine translation, labelled as such).
-- egui 0.37 shapes text with harfrust, so Tamil renders correctly when a Tamil font is loaded (`noto-fonts` has Noto Sans Tamil); add it as a fallback font.
-- Source info is kept separately for words / timing / translation, per song and per line where it differs (e.g. user edits), with the URL or file and fetch date, so the app can show a "where these lyrics came from" badge.
-- Lyric timing uses seconds and beats (like notes) and the same Bluetooth latency offset as Song mode.
+- Spotify's lyrics can't be used (no public API; licensed to Spotify). Lyrics
+  come from local files, LRCLIB, or are generated (Whisper). Spotify (Part 8)
+  only supplies title/artist/duration/position for lookup and sync.
+- **Songs are in several languages**: mostly Tamil, also Telugu and Hindi,
+  sometimes others. Nothing is Tamil-only: the language is stored per song
+  (`language`, `languages`) and per line (`lines[].language`, for songs that
+  mix e.g. Hindi + English). Whisper detects the song language from the
+  singing; `--language` (`--lyrics-language` on `analyze`) overrides it.
+- Three toggles per line: **native script** (`text`), **romanised**
+  (`romanized`: Tanglish / Tenglish / Hinglish …, one library — Aksharamukha
+  — for every Indian script), **English** (`translation`, offline machine
+  translation from any language, labelled as such).
+- Fonts: egui 0.37 shapes text with harfrust, so Indic scripts render when
+  the font is loaded: add Noto Sans Tamil, Noto Sans Telugu and Noto Sans
+  Devanagari (all in `noto-fonts`) as fallback fonts; more scripts as needed.
+- Source info is kept separately for words / timing / translation /
+  transliteration, per song and per line where it differs (e.g. user edits),
+  with the URL or file and fetch date, so the app can show a "where these
+  lyrics came from" badge. Model output is flagged in `auto_generated`.
+- Lyric timing uses seconds and beats (like notes) and the same Bluetooth
+  latency offset as Song mode (`visual_delay_ms()`, see Part 7's "line up").
 
 ## Notes for the next session
+
+### From Part 7 (Jam mode)
+
+- **Branch:** `part-7-jam` = `part-4b-loop` + `part-10a-full` merged (clean, it only adds `analyzer/`, and contains 10a-lite) + Part 7. 10b starts here.
+- **What it is:** Song mode with the analyzer's stems as the backing instead of the MIDI parts. Falling notes, chord sheet, wait mode, loops, speed, scoring, one-key mode all work as before; the stems just follow the song clock. MIDI songs and `--no-separate` songs have no stems (the Jam card says so and the MIDI backing plays).
+- **Audio** (all in the audio thread, allocation-free after `new`, checked by a test with a counting allocator, `src/testalloc.rs`, tests only):
+  - `audio/stems.rs`: `StemSet` (stems decoded with `claxon` into RAM as interleaved i16 stereo, on a `qwertone-stems` thread) and `StemPlayer`, owned by `SongPlayer`. New `SongCommand`s: `Stems(Option<Arc<StemSet>>)`, `StemsOn(bool)`, `StemGains([f32; 8])`, `StemPitch(semitones)`. `Renderer::render_block` calls `song.render_stems(l, r)` for every piece it renders (before `song.advance`), so stems see exactly the clock the MIDI events see (loop jumps, wait stops, speed).
+  - `audio/stretch.rs`: `SincTable` (32-tap Blackman-windowed sinc, 256 phases, cutoff follows the read step: sample-rate conversion 44.1 → 48 kHz and the resampling half of pitch shift) and `Pv`, a phase vocoder (FFT 2048, hop 512, Hann) with identity phase locking. It's a **random-access** vocoder: each output frame is analysed at the source position the song clock asks for *and one hop earlier*; the synthesis phase advances by the phase difference between those two analyses (no division by the analysis hop, so speed 0 = a clean freeze, and jumps are just another position). Peaks/rotations come from the mid (L+R) spectrum and are applied to both channels, so the stereo image stays put.
+  - Pitch shift by `r` at speed `v`: the vocoder stretches by `r / v` (analysis positions move `v / r` source frames per stream sample), then the stream is read `r × fs / fo` samples per output sample. 100 % speed, no pitch change, no wait mode → "Direct" (plain read + resampling, no vocoder at all).
+  - **Zero latency:** frames are centred on the clock's position for their output time (predicted from the clock at the start of each render call), and the source is in memory, so reading ahead costs nothing. Tested: a click in a stem comes out within 3 ms of the clock's time at 100 %, 50 %, 75 % + 3 semitones, −5 semitones.
+  - Each bus has two "lanes" so seeks / loop jumps / Direct ↔ vocoder switches cross-fade over 10 ms (the old lane coasts on, fading). Jumps are detected from `SongClock.seeks + loops`. A second bus plays the **drums without the pitch shift** (only used while pitch-shifting).
+  - **Wait mode:** always the vocoder; analysis positions are clamped to `wait − n/2`, so the band freezes on the last frame *before* your note and fades (τ 0.35 s). Resuming after it's mostly faded restarts cleanly (crisp attack). Pause / Escape / leaving the tab fades in ~10 ms; nothing runs while silent.
+  - Gains ramp over 20 ms (no clicks on mute / solo).
+  - Cost (release, 6 stems): 0.3 % of a core at 100 %, 1.1 % at 75 %, 2 % at 75 % + pitch shift (`cargo test --release -- --ignored --nocapture cost`). A **debug build** takes 25–50 % of a core when stretching: run the app in release when testing Jam mode.
+  - **Memory:** whole stems in RAM, ~42 MB per 4-minute stem (4 stems ≈ 170 MB, shown on the Jam card). Opening another song drops them: the UI keeps the `Arc` and frees a replaced set only once `Arc::strong_count == 1` (the audio thread let go), so the audio thread never frees memory.
+- **UI** (`ui/app/song/jam.rs`, a child module of `song.rs` so it can use `SongUi`; pure logic in `song/jam.rs`): the "Jam with the recording" card under the transport. *Play the real recording* (`cfg.jam.on`, default on) loads the stems in the background (progress bar; the MIDI backing plays meanwhile); once loaded every MIDI part track is muted (`song_mute_mask`; the metronome / count-in clicks still come from MIDI) and the stems play. The mixer: per stem On/Muted, Solo, volume 0–150 % (saved per stem name in `cfg.jam.volumes`), and a "your part" chip.
+  - **Your part is muted automatically** (`jam::my_stems`): a part's own `stem` wins (melody from the vocals → vocals); otherwise by role: melody → vocals, chords / the chord sheet → piano + guitar with the 6-stem model, else "other", bass → bass, drums → drums, the easy arrangement → vocals + harmony. Clicking On/Muted overrides it (e.g. hear the singer as a guide); overrides reset when "I play" changes.
+  - **Easy parts with `transpose != 0`:** `StemPitch(song_transpose())`, the same shift the MIDI backing gets, so the recording plays in the easy key (drums untouched). The Part 5 "won't match the recording" note is hidden in Jam mode.
+- **Bluetooth delay compensation** (`cfg.song.line_up`, default **on**, for Song mode in general, not only Jam): "delay the backing and the falling notes by the output delay L" is implemented as its equivalent, *the falling notes show the audio clock's own position* (`visual_delay_ms()` = only the Nudge, instead of `heard_delay_ms()`). Your key is heard L after you press it and the backing is heard L after the engine plays it, so pressing when a note reaches the line makes both arrive together; the visuals run L ahead of what you hear. Delaying the backing by L and the visuals by L gives exactly the same thing, plus L of extra start-up delay, so the engine doesn't delay anything. Off = Part 5 behaviour (notes follow what you hear). Scoring windows are still widened by the device delay (`with_latency(heard_delay_ms())`), so people who play by ear aren't punished. In line-up mode the Nudge means "my notes sound late → move left". `output_delay_ms()` = the delay without the nudge. **10b: lyrics should use `visual_delay_ms()` too** (same clock as the falling notes).
+- **Looper vs song channels** (from the 4b notes): `LoopCommand::Reserve(mask)`; `song_send_data` reserves the channels the song's parts use, so new loop layers borrow other channels. A layer that already has a channel when a song opens can still lose its instrument (rare: the song takes 3, 4, … from the bottom, layers 15, 14, … from the top).
+- **Config:** `[jam]` (`JamSettings`: `on`, `volumes`), `song.line_up`. All `#[serde(default)]`.
+- **Tests:** vocoder keeps pitch and level at 0 / 0.5 / 1 / 1.5 speed; sinc rows; stems line up with the clock at any speed/pitch; pitch kept when slowed, shifted when asked (±12, −5, +2); drums not shifted; mute / ramps; cross-fades on loop jumps and mode changes (no step bigger than the signal's own); wait freeze + fade, quick pause; silence outside the audio; no allocation while rendering across jumps / speed / pitch / wait / pause; FLAC loading (fixture `tests/fixtures/jam-song/`: 4 s, 4 stems, made by its `make.py` with numpy + ffmpeg); through the `Renderer` (timing, `StemsOn`, `AllOff`, the audio thread lets go of the `Arc`); auto-mute + gains (`song/jam.rs`); looper `Reserve`.
+- **Headless:** the song opens, stems load, the mixer, solo / mute, 50 % speed, +5 shift, wait mode, Jam on/off were clicked through under Xvfb with the release build (copy `tests/fixtures/jam-song` into `~/.local/share/qwertone/songs/`). The ALSA null device runs faster than real time, so nothing could be *heard*.
+- **Not checked on real hardware:** how the vocoder sounds on real, dense stems (expect some phasiness / softened drum hits at 50 %), and how line-up feels on the Galaxy Buds / XM4.
+- **Ideas not done:** a transient-preserving vocoder (phase reset on onsets) or `signalsmith-stretch` (C++, needs clang/bindgen) if the quality isn't good enough; streaming stems from disk instead of RAM; "play the original part instead of pitch-shifting"; remembering the mixer per song; keys for Jam (toggle stems, mute my part); count-in from the recording itself; recording / exporting the jam as audio (the 4a recorder only sees MIDI); a looper that loops the stems; jamming with songs analysed without stems by playing the original file (needs an mp3/m4a decoder such as `symphonia`).
+
+### From Parts 10a-lite and 10a-full (lyrics engine, moved here from `analyzer/README.md`)
+
+**For 10b (lyrics in the app)**
+- Read `lyrics.json` next to `song.json`; missing file = lyrics step never ran
+  (offer "Find lyrics", which runs `qwertone-analyze lyrics <song dir>
+  --json-progress`; it prints a `{"event": "lyrics", "status": …, "language":
+  …, "auto_generated": {…}}` line). `status` `not_found` / `instrumental` →
+  show that instead of an empty screen. Whisper can take minutes on a CPU:
+  show the `{"event": "stage", "stage": "lyrics", …}` lines ("transcribing 60 / 240 s"); `--light` makes it
+  quick (no models).
+- Toggles map to `text`, `romanized`, `translation` (**not** `tanglish`: that
+  10a-lite key is still written for Tamil lines but is deprecated). Hide the
+  native-script toggle for `*-Latn` lines (`romanized == text`), the romanised
+  toggle when `romanized` is null (English lines), and the English toggle while
+  every `translation` is null. English lines have `translation: null`: show
+  `text`. Label the English "machine translation".
+- Badge: `sources.words.name` (+ `timing` if different, + transliteration,
+  + translation), link to `url` or show `file`, and `fetched`. If
+  `auto_generated.words` / `.timing`, say so ("Auto-generated from the vocals
+  — may be wrong") and offer the editor / tap-along. `lines[].confidence`
+  (0–1, only on generated lines) can grey out doubtful lines.
+- Language: show `language` (and `languages` for mixed songs) and offer
+  "Wrong language?" → `qwertone-analyze lyrics <song> --language te --force`.
+- Current line: last line with `start <= t + bluetooth_offset`; use
+  `start_beat`/`end_beat` in the falling-notes view so slow-down/loops line up
+  with notes. Plain lyrics (`start == null`) can only be shown as a list.
+- Editor / tap-along: write edits back into `lyrics.json` with a per-line
+  `"sources": {"timing": {"kind": "user", "name": "edited in Qwertone",
+  "url": null, "file": null, "fetched": <now>}}` (or `words`). Re-running the
+  lyrics step **overwrites** `lyrics.json`, so either export the edit as
+  `lyrics/imported.lrc` (it then wins forever) or keep user edits in a
+  separate file and merge on load — decide in 10b. The simplest is: the
+  editor saves `lyrics/imported.lrc` + runs `qwertone-analyze lyrics`
+  (an imported synced .lrc is never re-aligned or re-transcribed; it is still
+  romanised and translated).
+- Word timing exists for enhanced-LRC sources, Whisper transcripts and well
+  aligned lines; LRCLIB is line-level.
+
+**From 10a-full (what was built, and what's left)**
+- Whisper is faster-whisper (CTranslate2), default `large-v3-turbo`, int8 on
+  the CPU. Transcripts are split into lines at 0.6 s pauses / 48 characters;
+  typical music hallucinations ("Thank you for watching", loops, high
+  compression ratio, silence) are dropped (`asr.good_segments`).
+- Alignment (`align.py`) is word-level: Whisper's words vs the lyric words by
+  a sound-alike key on romanised text, Needleman–Wunsch with free end gaps.
+  It is not a phoneme forced aligner: lines Whisper hears badly get spread-out
+  times and a low `confidence`. If that's not good enough on real songs, the
+  next step is CTC forced alignment (MMS / wav2vec2 on romanised text, which
+  `romanize.ascii_key` already produces) — heavier (torch, ~1.2 GB).
+- Translation: NLLB-200 distilled 600M (CT2 int8, CC BY-NC). Romanised lines
+  (Tanglish typed in Latin letters) aren't translated; transliterating them
+  back to script first would be the fix.
+- Whisper's "Urdu" for sung Hindi is mapped to Hindi (`languages.WHISPER_TO_FAMILY`).
+- Not run against the real models in CI (no model downloads there): the
+  engines are faked in `tests/test_lyrics_models.py`. Run
+  `QWERTONE_TEST_LYRICS_MODELS=1 .venv/bin/python -m pytest tests/test_lyrics_models.py`
+  once on a real machine, and try a few real Tamil / Telugu / Hindi songs.
+- Romanisation rules are in `romanize._tidy`; word-initial ச is "s"
+  (sinna, not chinna), as most Tanglish typists write it — make it a setting
+  if wanted.
+
+**For merging** (done in Part 7)
+- Only `analyzer/` changed. `song.json` is unchanged and its fingerprint
+  ignores every lyrics option, so existing song folders are not re-analysed.
+  `lyrics.json` files from 10a-lite rebuild on the next `lyrics` / `analyze`
+  run (`lyrics_version` 2); `format_version` is still 1 (only keys were added).
+- New dependencies: `mutagen` and `aksharamukha` (pure Python, always
+  installed); `faster-whisper`, `ctranslate2`, `sentencepiece`,
+  `huggingface_hub` in the `models` extra (and a `lyrics` extra on their own).
+  `setup.sh` also installs `chromaprint` (fpcalc) with pacman.
+- `tanglish.py` is gone (replaced by `romanize.py`); `lyrics.line_language` /
+  `song_language` / `TANGLISH_WORDS` still exist as aliases into `languages.py`.
 
 ### From Part 4b (looper, virtual MIDI out, more instruments)
 

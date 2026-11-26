@@ -18,6 +18,9 @@ use crate::ui::song_view::{
 use crate::ui::widgets::{Hint, HintKind};
 use egui::vec2;
 
+mod jam;
+use jam::JamUi;
+
 /// Channels for the song's parts (0–2 are yours, 9 is drums).
 const SONG_CHANNELS: [u8; 12] = [3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
 /// Track number of the metronome clicks.
@@ -97,6 +100,8 @@ pub(super) struct SongUi {
     edit_hear_all: bool,
     confirm_leave: bool,
     pub was_tab: bool,
+    // Jam mode (Part 7).
+    jam: JamUi,
 }
 
 impl SongUi {
@@ -150,6 +155,7 @@ impl SongUi {
             edit_hear_all: true,
             confirm_leave: false,
             was_tab: false,
+            jam: JamUi::new(),
         }
     }
 }
@@ -166,6 +172,24 @@ impl QwertoneApp {
     /// measured Bluetooth / headphone delay if you ran the test, else a
     /// typical value, plus the Sync nudge.
     pub(super) fn heard_delay_ms(&self) -> f32 {
+        (self.output_delay_ms() + self.cfg.song.offset_ms).max(0.0)
+    }
+
+    /// How far behind the audio clock the falling notes (and scoring) run.
+    /// Normally what you hear. With "line up" (Part 7) only the nudge: the
+    /// notes run ahead of the sound by the output delay, so a key pressed
+    /// on the line comes out of the earbuds together with the backing —
+    /// the same as delaying the backing and the notes by that delay.
+    pub(super) fn visual_delay_ms(&self) -> f32 {
+        if self.cfg.song.line_up {
+            self.cfg.song.offset_ms
+        } else {
+            self.heard_delay_ms()
+        }
+    }
+
+    /// The output's delay without the nudge (measured, typical or reported).
+    pub(super) fn output_delay_ms(&self) -> f32 {
         let measured = self
             .current_device
             .as_ref()
@@ -178,7 +202,7 @@ impl QwertoneApp {
             (None, _, Some(e)) => e.stats.reported_ms() + e.stats.buffer_ms(),
             _ => 20.0,
         };
-        (base + self.cfg.song.offset_ms).max(0.0)
+        base.max(0.0)
     }
 
     fn practice_settings(&self) -> Settings {
@@ -343,6 +367,7 @@ impl QwertoneApp {
         let mine_t = self.song_transpose();
         let mut events = Vec::new();
         let mut k = 0;
+        let mut channels = 0u16;
         for (i, p) in song.parts.iter().enumerate() {
             let track = i.min(62) as u8;
             let ch = if p.is_drum {
@@ -350,6 +375,7 @@ impl QwertoneApp {
             } else {
                 let c = SONG_CHANNELS[k % SONG_CHANNELS.len()];
                 k += 1;
+                channels |= 1 << c;
                 self.send(Command::ChannelProgram {
                     channel: c,
                     program: p.program,
@@ -404,6 +430,10 @@ impl QwertoneApp {
             });
             b += 1.0;
         }
+        // New loop layers keep off the song's channels (Part 4b note).
+        self.send(Command::Loop(crate::audio::looper::LoopCommand::Reserve(
+            channels,
+        )));
         let data = Arc::new(SongData::new(events, song.duration + 0.3));
         if let Some(old) = self.song_ui.data.replace(data.clone()) {
             self.song_ui.retired.push(old);
@@ -422,13 +452,16 @@ impl QwertoneApp {
         if self.song_ui.song.is_some() {
             self.song_send_data();
         }
+        self.jam_resend();
     }
 
     fn song_mute_mask(&self) -> u64 {
         let su = &self.song_ui;
         let mut m = 0u64;
+        let jam = self.jam_active();
         for (i, h) in su.hear.iter().enumerate() {
-            if !h {
+            // Jam mode: the stems replace every MIDI part.
+            if !h || jam {
                 m |= 1u64 << i.min(62);
             }
         }
@@ -915,6 +948,7 @@ impl QwertoneApp {
             busy = true;
         }
 
+        busy |= self.jam_poll(ctx);
         if self.song_ui.song.is_none() {
             return busy;
         }
@@ -934,7 +968,7 @@ impl QwertoneApp {
             Some(d) => d.as_secs_f64(),
             None => -(c.at - now).as_secs_f64(),
         };
-        let delay = self.heard_delay_ms() as f64 / 1000.0;
+        let delay = self.visual_delay_ms() as f64 / 1000.0;
         let mut heard = practice::heard_time(
             ClockSnapshot {
                 pos: c.pos,
@@ -1646,6 +1680,7 @@ impl QwertoneApp {
         self.song_top_bar(ui);
         ui.add_space(4.0);
         self.song_transport(ui);
+        self.song_jam(ui);
         ui.add_space(4.0);
         // Timeline.
         let (dur, sections, marks) = {
@@ -1804,6 +1839,7 @@ impl QwertoneApp {
             }
         });
         if rebuild {
+            self.song_ui.jam.parts_changed();
             self.song_default_hear();
             self.song_rebuild(true);
             self.song_send_data();
@@ -1843,7 +1879,7 @@ impl QwertoneApp {
                 }
             ));
         }
-        if self.song_transpose() != 0 {
+        if self.song_transpose() != 0 && !self.jam_active() {
             notes.push(format!(
                 "This easy part is in an easier key ({:+} semitones), so the backing is moved too and won't match the original recording.",
                 self.song_transpose()
@@ -2012,6 +2048,13 @@ impl QwertoneApp {
     fn song_sound(&mut self, ui: &mut egui::Ui) {
         let p = self.palette;
         let mut hear_changed = false;
+        if self.jam_active() {
+            ui.label(
+                RichText::new("Jam is on: you hear the recording (see the mixer above), not these MIDI parts.")
+                    .small()
+                    .color(p.tertiary),
+            );
+        }
         ui.horizontal_wrapped(|ui| {
             ui.label("Hear:");
             let song = self.song_ui.song.as_ref().unwrap();
@@ -2091,22 +2134,35 @@ impl QwertoneApp {
                 .as_ref()
                 .and_then(|d| self.cfg.devices.get(&d.sink))
                 .is_some_and(|x| x.latency_ms > 0.0);
-            ui.label(format!(
-                "Sync: notes and scoring are shifted by {:.0} ms so they match what you hear{}.",
-                self.heard_delay_ms(),
-                if bt && !measured { " (a guess: run the latency test in the Audio tab)" } else if measured { " (your measured delay)" } else { "" }
-            ));
+            let source = if bt && !measured { " (a guess: run the latency test in the Audio tab)" } else if measured { " (your measured delay)" } else { "" };
+            if self.cfg.song.line_up {
+                ui.label(format!(
+                    "Sync: the notes run {:.0} ms ahead of the sound{source}, so what you press lands with the backing.",
+                    self.output_delay_ms() - self.cfg.song.offset_ms
+                ));
+            } else {
+                ui.label(format!(
+                    "Sync: notes and scoring are shifted by {:.0} ms so they match what you hear{source}.",
+                    self.heard_delay_ms(),
+                ));
+            }
             ui.label("Nudge");
             let mut o = self.cfg.song.offset_ms;
+            let tip = if self.cfg.song.line_up {
+                "If your notes sound late against the backing, move left; if early, move right."
+            } else {
+                "If notes reach the line before you hear them, move right; if after, move left."
+            };
             if ui
                 .add(egui::Slider::new(&mut o, -200.0..=200.0).suffix(" ms").integer())
-                .on_hover_text("If notes reach the line before you hear them, move right; if after, move left.")
+                .on_hover_text(tip)
                 .changed()
             {
                 self.cfg.song.offset_ms = o;
                 self.mark_dirty();
             }
         });
+        self.line_up_toggle(ui);
         let shift = self.song_ui.shift;
         ui.horizontal(|ui| {
             ui.label("Octave of the notes");
@@ -2460,14 +2516,21 @@ impl QwertoneApp {
         text += "F5 play/pause · F6 restart · F7/F8 slower/faster · F9 wait mode.";
         ui.label(RichText::new(text).color(p.on_surface_variant));
         if self.current_device.as_ref().is_some_and(|d| d.bluetooth) {
-            ui.label(
-                RichText::new(format!(
+            let text = if self.cfg.song.line_up {
+                format!(
+                    "Bluetooth: your earbuds play everything about {:.0} ms late, your notes too. The falling notes run \
+                     that much ahead of the sound, so press when a note reaches the line (not when you hear it) and it \
+                     comes out together with the backing.",
+                    self.output_delay_ms()
+                )
+            } else {
+                format!(
                     "Bluetooth: your earbuds play sound about {:.0} ms late. The falling notes and the scoring are moved by \
                      the same amount, so press when you hear it, and a slightly late press still counts.",
                     self.heard_delay_ms()
-                ))
-                .color(p.tertiary),
-            );
+                )
+            };
+            ui.label(RichText::new(text).color(p.tertiary));
         }
     }
 

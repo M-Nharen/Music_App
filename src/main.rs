@@ -12,6 +12,8 @@ mod midiout;
 mod music;
 mod record;
 mod song;
+#[cfg(test)]
+mod testalloc;
 mod theme;
 mod theory;
 mod ui;

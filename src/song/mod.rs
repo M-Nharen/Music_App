@@ -16,6 +16,7 @@
 pub mod analyze;
 pub mod chords;
 pub mod edit;
+pub mod jam;
 pub mod layout;
 pub mod library;
 pub mod midi;
@@ -36,7 +37,6 @@ pub struct Metadata {
 }
 
 /// A separated instrument track (Part 7 plays these).
-#[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct Stem {
     pub name: String,
@@ -197,7 +197,7 @@ fn vel() -> u8 {
     96
 }
 
-#[allow(dead_code)] // method / stem: for Part 7's stem mixer
+#[allow(dead_code)] // method: not shown yet
 #[derive(Clone, Debug, Deserialize)]
 pub struct Part {
     pub id: String,

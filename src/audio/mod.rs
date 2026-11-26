@@ -9,6 +9,8 @@ pub mod looper;
 pub mod patterns;
 pub mod sequencer;
 pub mod songplay;
+pub mod stems;
+pub mod stretch;
 
 use crate::midiout::MidiMsg;
 use crate::record::RecEvent;
@@ -732,6 +734,8 @@ impl Renderer {
                 Backend::Builtin(s) => s.render(l, r),
                 Backend::SoundFont(s) => s.render(l, r),
             }
+            // Jam mode: the stems follow the song clock.
+            self.song.render_stems(l, r);
             self.song.advance(end - pos);
             self.song.after_render();
             pos = end;
@@ -1025,6 +1029,69 @@ mod tests {
 
     fn peak(r: &Renderer, n: usize) -> f32 {
         r.left[..n].iter().fold(0.0f32, |m, x| m.max(x.abs()))
+    }
+
+    #[test]
+    fn jam_stems_follow_the_song_through_the_renderer() {
+        use songplay::SongData;
+        use stems::{MAX_STEMS, StemSet};
+        let (mut r, tx, _) = renderer();
+        // One stem: silence, then a 1 kHz tone from 0.5 s.
+        let rate = 44_100;
+        let x: Vec<f32> = (0..rate * 2)
+            .flat_map(|i| {
+                let t = i as f64 / rate as f64;
+                let s = if t >= 0.5 {
+                    (t * 1000.0 * std::f64::consts::TAU).sin() as f32 * 0.5
+                } else {
+                    0.0
+                };
+                [s, s]
+            })
+            .collect();
+        let set = Arc::new(StemSet::from_f32(rate as u32, vec![("other", x)]));
+        let data = Arc::new(SongData::new(Vec::new(), 2.0));
+        for c in [
+            SongCommand::Load(Some(data.clone())),
+            SongCommand::Stems(Some(set.clone())),
+            SongCommand::StemsOn(true),
+            SongCommand::StemGains([1.0; MAX_STEMS]),
+            SongCommand::Play(true),
+        ] {
+            tx.send(Command::Song(c)).unwrap();
+        }
+        let mut out = Vec::new();
+        for _ in 0..(48_000 / 128) {
+            r.render_block(128, Instant::now());
+            out.extend_from_slice(&r.left[..128]);
+        }
+        let first = out.iter().position(|v| v.abs() > 0.2).unwrap();
+        assert!(
+            (first as f64 / 48_000.0 - 0.5).abs() < 0.002,
+            "tone at {first}"
+        );
+        // Stems off: quiet within a few buffers, the song keeps going.
+        tx.send(Command::Song(SongCommand::StemsOn(false))).unwrap();
+        for _ in 0..30 {
+            r.render_block(128, Instant::now());
+        }
+        assert!(peak(&r, 128) < 1e-3);
+        assert!(r.song.moving());
+        // Escape (AllOff) pauses the song and with it the stems.
+        tx.send(Command::Song(SongCommand::StemsOn(true))).unwrap();
+        for _ in 0..10 {
+            r.render_block(128, Instant::now());
+        }
+        assert!(peak(&r, 128) > 0.2);
+        tx.send(Command::AllOff).unwrap();
+        for _ in 0..30 {
+            r.render_block(128, Instant::now());
+        }
+        assert!(peak(&r, 128) < 1e-3);
+        // The audio thread let go of the stems when told to.
+        tx.send(Command::Song(SongCommand::Stems(None))).unwrap();
+        r.render_block(128, Instant::now());
+        assert_eq!(Arc::strong_count(&set), 1);
     }
 
     #[test]

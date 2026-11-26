@@ -2,7 +2,7 @@
 
 Play music on your laptop keyboard. Built for Arch + Hyprland (end4 rice), works over Bluetooth earbuds, and lets you remap every key.
 
-> **Status: Parts 1, 2, 3, 5 and 6 of 9.** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), Song mode (falling notes, chord sheet, wait mode, loops, scoring, one-key mode, auto song layout), a note editor, live listen mode, the song analyzer (`analyzer/`), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
+> **Status: Parts 1–7 of 9, plus the lyrics engine (10a).** Low-latency engine, four layouts (Piano, Chords + Melody, Isomorphic, Drums), auto-accompaniment, Learn mode (theory overlay, 23 lessons, ear-training games), metronome, recording and a looper, MIDI out, Song mode (falling notes, chord sheet, wait mode, loops, scoring, one-key mode, auto song layout), Jam mode (play along with the real recording's separated parts), a note editor, live listen mode, the song analyzer with lyrics (`analyzer/`), keybind editor, latency tools, keyboard test, end4 theme. See [PLAN.md](PLAN.md) for what's next.
 
 ## Install (Arch)
 
@@ -184,7 +184,14 @@ The **Song** tab teaches you real songs on your own keys.
 - Notes the analyzer wasn't sure about are drawn dimmed and dashed with a "?". Trust your ears.
 - **F5** play/pause · **F6** restart · **F7/F8** slower/faster · **F9** wait mode on/off (when your layout doesn't use those keys).
 
-**Bluetooth.** The falling notes and the scoring are shifted by your measured delay (Audio & latency → latency test), and a slightly late press still counts (the same grace window as the chord keys). If it still feels off, *Sound & sync → Nudge* moves everything by a few ms.
+**Jam with the recording.** Songs analysed with stem separation (the default) come with the real recording split into parts: vocals, drums, bass and the other instruments (piano and guitar too with the 6-stem model). With *Play the real recording* on (the **Jam with the recording** card, on by default) you hear the actual band instead of the MIDI notes, and the part you play is muted so you take its place (playing the melody mutes the singer; chords mute the other instruments). The mixer has On/Muted, Solo and a volume for each part: turn the singer back on to follow along, or solo the bass to hear it clearly.
+
+- **Speed** works on the recording too: it's time-stretched, so a slowed-down song keeps its pitch.
+- **Easy parts in an easier key** (*Melody (easy)* moved to C, say): the recording is pitch-shifted to match, so you still play along in tune. The drums aren't shifted.
+- **Loops and wait mode** work as before. While the song waits for your note, the band holds its last sound and fades out.
+- The stems are loaded into memory when you open the song (about 40 MB per part for a 4-minute song; the card shows how much).
+
+**Bluetooth.** *Line up with my output delay* (on by default) shifts the backing and the falling notes by your earbuds' delay: press a key when its note reaches the line and your note comes out of the earbuds together with the band. (Without it the notes follow what you hear, and what you play sounds a little late against the backing.) The delay is the one you measured (Audio & latency → latency test); the scoring still forgives a slightly late press (the same grace window as the chord keys). If it still feels off, *Sound & sync → Nudge* moves things by a few ms.
 
 **Edit notes.** *Edit notes* opens the part with the most unsure notes in a piano roll. **Tab** jumps to the next unsure note (it plays so you can check it by ear), ↑↓ change its pitch, drag to move, drag the right edge to resize, double-click to add, Delete removes, **Enter** marks it "looks right", Ctrl+Z undoes. **Save** (Ctrl+S) writes `song.json` (every note you touched gets confidence 1.0; a `song.json.bak` is kept) and refreshes the song's MIDI files. For a plain MIDI file it saves `<name>-edited.mid` next to it.
 
@@ -255,7 +262,7 @@ Settings live in `~/.config/qwertone/config.toml` and reload on save too (key, s
 Bluetooth adds roughly 150–250 ms of delay. That comes from the earbuds and the Bluetooth codec, not from Qwertone. To get the most out of it:
 
 1. **Audio & latency → Output.** If a lower-delay codec is available, click **Switch to a2dp-sink-sbc**. SBC has less delay than AAC or LDAC (LDAC on the XM4 has the most).
-2. **Run the latency test** with each pair and press **Save**. Song mode uses this number to line up the falling notes and the scoring with what you actually hear.
+2. **Run the latency test** with each pair and press **Save**. Song and Jam mode use this number to line up the falling notes, the backing and your own notes.
    Every saved pair appears under **Saved devices** (name, Bluetooth or wired, delay, instrument, and whether it's connected now), where you can rename, re-test or remove it.
 3. **Choose an instrument per device.** Sounds marked ✦ (pads, strings, organ, choir) have soft attacks that hide the delay. Qwertone switches to it automatically when those earbuds connect.
 4. Wired earphones (any cheap pair) bring the delay down to about 5 ms with no setup.
@@ -290,6 +297,8 @@ src/
                 and key guessing, practice (targets, timing, wait, scoring),
                 the auto song layout, the note editor, running the analyzer
   audio/songplay.rs   song playback in the audio thread (speed, loops, wait)
+  audio/stems.rs      Jam mode: the analyzer's stems as the backing track
+  audio/stretch.rs    time-stretch / pitch-shift (phase vocoder) + resampling
   audio/looper.rs     the looper (layers, overdub, mute) in the audio thread
   record.rs     recording takes to MIDI files, tap tempo
   midiout.rs    virtual MIDI out (ALSA sequencer port + timing thread)
